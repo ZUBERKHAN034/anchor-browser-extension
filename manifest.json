@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Drift Download Manager",
+  "version": "1.0.0",
+  "description": "Send browser downloads to Drift for faster, resumable, multi-connection downloading.",
+  "permissions": ["downloads", "contextMenus", "cookies", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html", "default_title": "Drift" },
+  "icons": { "128": "icon128.png" }
+}
