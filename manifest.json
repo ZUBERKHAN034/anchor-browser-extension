@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "Drift Download Manager",
+  "name": "Anchor Download Manager",
   "version": "1.1.0",
-  "description": "Send browser downloads to Drift for faster, resumable, multi-connection downloading.",
+  "description": "Send browser downloads to Anchor for faster, resumable, multi-connection downloading.",
   "permissions": ["downloads", "downloads.ui", "contextMenus", "cookies", "storage", "alarms", "nativeMessaging"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js" },
-  "action": { "default_popup": "popup.html", "default_title": "Drift" },
+  "action": { "default_popup": "popup.html", "default_title": "Anchor" },
   "icons": { "128": "icon128.png" },
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyT6TIGO+QfWz/+mn/FaQOiS7dhn+sJm8E1tB/ClUWcf5o+nPu7RTn7VsJzZ4RCnLyJv/PHrkwZRjXmScT7qczgjmlZhkM3CAvAmitpR1Ccx46+OHpI09CJZdOEf1caURT3lmgO8X857OMbnH1EbSbOPTRpMzK5X2SjbgYgeJ/UI89CFFLgimOKj08iBOJT9OQ7gIw4/TjDmQIzUQvmpp5w35dRrxG/TsdZF2XDBEG+epUwCw9d31gos1+iuiio5scsDz6XTxcrr9gORzUiYe0ac7w0Ey9be6fyhHWhBIF3NM6rG9EiyHNpZhpbsrB2pDyKWYnaCBSUFPv4f+T93KtQIDAQAB"
 }
