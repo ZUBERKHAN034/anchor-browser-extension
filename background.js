@@ -43,7 +43,7 @@ async function isReady() {
   return ready;
 }
 
-// While Drift takes over downloads, hide the browser's own download bubble (like FDM does).
+// While Drift takes over downloads, hide the browser's own download bubble.
 async function setReady(value) {
   ready = value;
   await chrome.storage.session.set({ driftReady: value });
