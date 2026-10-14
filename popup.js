@@ -3,6 +3,8 @@ const toggle = document.getElementById('enabled');
 chrome.storage.local.get('enabled').then(({ enabled = true }) => { toggle.checked = enabled; });
 toggle.addEventListener('change', () => chrome.storage.local.set({ enabled: toggle.checked }));
 
+chrome.runtime.sendMessage('refresh').catch(() => {});
+
 fetch('http://127.0.0.1:47821/ping', { signal: AbortSignal.timeout(800) })
   .then((r) => r.json())
   .then((j) => {
