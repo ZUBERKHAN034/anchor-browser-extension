@@ -167,13 +167,25 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
+// Sends a link the user picked (context menu, YouTube buttons), starting Anchor first if it isn't running.
+async function downloadWithAnchor(url, referrer) {
+  if (await sendToAnchor(url, undefined, referrer)) return true;
+  if (!(await launchAnchor())) return false;
+  await setMode('ready');
+  return sendToAnchor(url, undefined, referrer);
+}
+
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   let url = info.linkUrl || info.srcUrl;
   // The page itself, or a player whose source is a blob: only the page's address means anything to Anchor.
   if (info.menuItemId === 'anchor-download-page' || !url || !/^https?:/i.test(url)) url = info.pageUrl || tab?.url;
   if (!url) return;
-  if (!(await sendToAnchor(url, undefined, tab?.url)) && (await launchAnchor())) {
-    await setMode('ready');
-    await sendToAnchor(url, undefined, tab?.url);
-  }
+  await downloadWithAnchor(url, tab?.url);
+});
+
+// The Download buttons youtube.js adds to YouTube pages.
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type !== 'anchor-download' || !/^https:\/\/www\.youtube\.com\//.test(message.url ?? '')) return;
+  downloadWithAnchor(message.url, message.referrer ?? sender.tab?.url).then((ok) => sendResponse({ ok }));
+  return true; // answers asynchronously
 });
