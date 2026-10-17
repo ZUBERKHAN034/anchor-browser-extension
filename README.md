@@ -11,6 +11,7 @@
 - **Takes over downloads**: new browser downloads go to Anchor for faster, resumable, multi-connection downloading.
 - **Starts Anchor when needed**: if Anchor isn't running, the extension launches it through its native messaging host.
 - **Download with Anchor**: a context menu item for any link.
+- **YouTube buttons**: an Anchor button next to Like and Share downloads the video, or offers the whole playlist when the video plays from one; playlist pages get a Download playlist button.
 - **Falls back safely**: when Anchor is off or unavailable, the browser downloads the file itself.
 - **Toggle**: turn sending on or off from the toolbar popup.
 
