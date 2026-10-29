@@ -7,6 +7,22 @@
   margin: 0 0 10px;
 }
 
+/* Profile Reel post dialogs use a horizontal action row with Save at the far edge.
+   Attach the logo to Save so it stays adjacent and shares its vertical center. */
+.anchor-ig-save-action-slot {
+  position: relative !important;
+  overflow: visible !important;
+}
+
+#anchor-ig.anchor-ig-before-save {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  right: calc(100% + 6px);
+  margin: 0;
+  transform: translateY(-50%);
+}
+
 .anchor-ig-button {
   position: relative;
   display: inline-flex;

@@ -328,9 +328,16 @@
                 < Math.abs((likeRect.left + likeRect.right) / 2 - (saveRect.left + saveRect.right) / 2);
               const flexDirection = getComputedStyle(parent).flexDirection;
               const horizontalPostActions = flexDirection.startsWith('row') || sameRow;
-              return { rail: parent, anchorBefore: horizontalPostActions ? saveGroup : likeGroup };
+              // In the profile Reel post dialog, the action row uses space-between,
+              // so inserting another sibling before Save sends it to the far edge
+              // of the row. Anchor it to Save instead; this leaves the standard
+              // vertical Reel rail in its original position before Like.
+              if (horizontalPostActions) {
+                return { rail: saveGroup, anchorBefore: null, beforeSave: true };
+              }
+              return { rail: parent, anchorBefore: likeGroup, beforeSave: false };
             }
-            return { rail: parent, anchorBefore: likeGroup };
+            return { rail: parent, anchorBefore: likeGroup, beforeSave: false };
           }
         }
         node = parent;
@@ -345,15 +352,24 @@
     const target = url ? actionRail() : null;
     let root = document.getElementById(ROOT_ID);
     if (!url || !target) {
+      const previousSaveSlot = root?.classList.contains('anchor-ig-before-save') ? root.parentElement : null;
       root?.remove();
+      previousSaveSlot?.classList.remove('anchor-ig-save-action-slot');
       return;
     }
     if (root?.dataset.url === url && root.parentElement === target.rail
-        && root.nextElementSibling === target.anchorBefore) return;
+        && (target.beforeSave ? root.classList.contains('anchor-ig-before-save')
+          : !root.classList.contains('anchor-ig-before-save') && root.nextElementSibling === target.anchorBefore)) return;
+    const previousSaveSlot = root?.classList.contains('anchor-ig-before-save') ? root.parentElement : null;
     root?.remove();
+    previousSaveSlot?.classList.remove('anchor-ig-save-action-slot');
     root = document.createElement('div');
     root.id = ROOT_ID;
     root.dataset.url = url;
+    if (target.beforeSave) {
+      root.classList.add('anchor-ig-before-save');
+      target.rail.classList.add('anchor-ig-save-action-slot');
+    }
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'anchor-ig-button';
@@ -369,7 +385,8 @@
     });
     root.append(button);
     restoreLoading(button);
-    target.rail.insertBefore(root, target.anchorBefore);
+    if (target.beforeSave) target.rail.append(root);
+    else target.rail.insertBefore(root, target.anchorBefore);
   }
 
   let queued = false;
