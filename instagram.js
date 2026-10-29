@@ -106,6 +106,27 @@
         return null;
       }
     }).filter(Boolean);
+    const current = location.pathname.match(/^\/(reel|reels|p)\/([^/]+)\/?$/);
+    const currentLink = current && links.find(({ type, shortcode }) => type === current[1] && shortcode === current[2]);
+    if (currentLink) {
+      links.splice(links.indexOf(currentLink), 1);
+      links.unshift(currentLink);
+    } else if (current) {
+      links.unshift({ type: current[1], shortcode: current[2], imgIndex: Number(new URL(location.href).searchParams.get('img_index')) || null });
+    } else {
+      const videoAnchor = article.querySelector('video')?.closest('a[href]');
+      if (videoAnchor) {
+        try {
+          const url = new URL(videoAnchor.href, location.origin);
+          const match = url.pathname.match(/^\/(reel|reels|p)\/([^/]+)\/?$/);
+          const linkedPost = match && links.find(({ type, shortcode }) => type === match[1] && shortcode === match[2]);
+          if (linkedPost) {
+            links.splice(links.indexOf(linkedPost), 1);
+            links.unshift(linkedPost);
+          }
+        } catch {}
+      }
+    }
     return links;
   }
 
@@ -164,7 +185,17 @@
   function syncTimelineVideos() {
     const activeControls = new Set();
     if (!/^\/(?:reel|reels)\//.test(location.pathname)) {
-      for (const article of document.querySelectorAll('article')) {
+      const posts = [...document.querySelectorAll('article')];
+      // Profile and Explore grid posts open in a dialog on some Instagram layouts instead of an article.
+      // Use the dialog as a post container only when it has no article with its own video action row.
+      for (const dialog of document.querySelectorAll('[role="dialog"]')) {
+        const hasArticlePost = [...dialog.querySelectorAll('article')].some((article) =>
+          article.querySelector('video') && article.querySelector('svg[aria-label="Save"]')
+          && article.querySelector(LIKE_ICONS));
+        if (!hasArticlePost) posts.push(dialog);
+      }
+
+      for (const article of posts) {
         const links = postLinks(article);
         const hasCarousel = !!article.querySelector('button[aria-label^="Go to slide "]')
           || !!article.querySelector('button[aria-label="Next"], button[aria-label="Go back"]')
@@ -175,9 +206,9 @@
         if (!url) continue;
         const post = hasCarousel ? links.find(({ type }) => type === 'p') : null;
 
-        const saveIcon = [...article.querySelectorAll('svg[aria-label="Save"]')].find(rendered);
+        const saveIcon = [...article.querySelectorAll('svg[aria-label="Save"]')].find(visible);
         const row = saveIcon?.closest('section');
-        if (!saveIcon || !row || !row.querySelector(LIKE_ICONS)) continue;
+        if (!saveIcon || !row || ![...row.querySelectorAll(LIKE_ICONS)].some(visible)) continue;
         let saveSlot = saveIcon;
         while (saveSlot.parentElement && saveSlot.parentElement !== row) saveSlot = saveSlot.parentElement;
         if (saveSlot.parentElement !== row) continue;
@@ -238,9 +269,14 @@
       while (node.parentElement) {
         const parent = node.parentElement;
         if (parent.children.length >= 3 && parent.querySelectorAll(OTHER_ACTION_ICONS).length >= 2) {
-          let likeGroup = likeIcon;
-          while (likeGroup.parentElement && likeGroup.parentElement !== parent) likeGroup = likeGroup.parentElement;
-          if (likeGroup.parentElement === parent) return { rail: parent, likeGroup };
+          const saveIcon = [...parent.querySelectorAll('svg[aria-label="Save"]')].find(visible);
+          if (!saveIcon) {
+            node = parent;
+            continue;
+          }
+          let saveGroup = saveIcon;
+          while (saveGroup.parentElement && saveGroup.parentElement !== parent) saveGroup = saveGroup.parentElement;
+          if (saveGroup.parentElement === parent) return { rail: parent, saveGroup };
         }
         node = parent;
       }
@@ -258,7 +294,7 @@
       return;
     }
     if (root?.dataset.url === url && root.parentElement === target.rail
-        && root.nextElementSibling === target.likeGroup) return;
+        && root.nextElementSibling === target.saveGroup) return;
     root?.remove();
     root = document.createElement('div');
     root.id = ROOT_ID;
@@ -275,7 +311,7 @@
       send(url, button);
     });
     root.append(button);
-    target.rail.insertBefore(root, target.likeGroup);
+    target.rail.insertBefore(root, target.saveGroup);
   }
 
   let queued = false;
