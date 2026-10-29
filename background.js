@@ -175,11 +175,11 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 // Sends a link the user picked (context menu, YouTube buttons), starting Anchor first if it isn't running.
-async function downloadWithAnchor(url, referrer, filename) {
-  if (await sendToAnchor(url, filename, referrer)) return true;
+async function downloadWithAnchor(url, referrer) {
+  if (await sendToAnchor(url, undefined, referrer)) return true;
   if (!(await launchAnchor())) return false;
   await setMode('ready');
-  return sendToAnchor(url, filename, referrer);
+  return sendToAnchor(url, undefined, referrer);
 }
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -206,8 +206,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const cdnUrl = url.protocol === 'https:' && /\.(?:fbcdn\.net|cdninstagram\.com)$/i.test(url.hostname)
     && /\.mp4$/i.test(url.pathname) && senderHost === 'www.instagram.com';
   if (!siteUrl && !cdnUrl) return;
-  const filename = typeof message.filename === 'string' && !/[\\/\0]/.test(message.filename)
-    ? message.filename.slice(0, 200) : undefined;
-  downloadWithAnchor(url.href, message.referrer ?? sender.tab?.url, filename).then((ok) => sendResponse({ ok }));
+  downloadWithAnchor(url.href, message.referrer ?? sender.tab?.url).then((ok) => sendResponse({ ok }));
   return true; // answers asynchronously
 });
