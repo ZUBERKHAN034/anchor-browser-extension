@@ -146,6 +146,12 @@ html[dark] .anchor-yt-overlay .anchor-yt-button:hover {
   content: "";
   opacity: var(--anchor-preview-background-opacity, 1);
   pointer-events: none;
+  /* The content script mirrors YouTube's live control opacity during its own fade. */
+  transition: none;
+}
+
+.anchor-yt-preview-control.anchor-yt-preview-background-faded::before {
+  opacity: 0;
 }
 
 .anchor-yt-preview-icon {
