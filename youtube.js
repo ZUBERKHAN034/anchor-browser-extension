@@ -90,10 +90,8 @@
       let button = control?.querySelector('.anchor-yt-preview-button');
       if (!button && media.paused) continue;
       const controls = player.querySelector('.ytInlinePlayerControlsTopRightControls');
-      if (!controls && !control) continue;
       activePlayers.add(player);
       if (!control || !button) {
-        if (!controls) continue;
         control?.remove();
         control = document.createElement('div');
         control.className = 'ytInlinePlayerControlsTopRightControlsCircleButton anchor-yt-preview-control';
@@ -110,9 +108,14 @@
         });
         icon.append(button);
         control.append(icon);
-        controls.append(control);
       }
-      if (controls && control.parentElement !== controls) controls.append(control);
+      // Keep the control outside YouTube's fixed-height stack, which clips extra children.
+      if (control.parentElement !== player) player.append(control);
+      const playerRect = player.getBoundingClientRect();
+      const controlsRect = controls?.getBoundingClientRect();
+      control.style.top = `${Math.max(0, controlsRect?.height ? controlsRect.bottom - playerRect.top : 112)}px`;
+      control.style.right = `${Math.max(0, controlsRect?.width ? playerRect.right - controlsRect.right : 12)}px`;
+      control.style.opacity = controls ? getComputedStyle(controls).opacity : '1';
       button.dataset.url = url;
       // Keep an accessible name without showing the browser's large native tooltip over the preview.
       button.title = '';

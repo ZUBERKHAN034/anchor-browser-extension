@@ -127,7 +127,16 @@ html[dark] .anchor-yt-overlay .anchor-yt-button:hover {
   flex: none;
 }
 
-/* Reuse YouTube's own circular control stack for exact spacing, surface and fade behavior. */
+/* Mirror YouTube's native control while keeping it outside the stack's fixed-height clipping box. */
+.anchor-yt-preview-control {
+  position: absolute !important;
+  z-index: 70;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  transition: opacity 0.25s cubic-bezier(0, 0, 0.2, 1);
+}
+
 .anchor-yt-preview-button {
   display: flex;
   align-items: center;
