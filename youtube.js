@@ -84,29 +84,48 @@
         media.addEventListener('pause', schedule);
         media.addEventListener('ended', schedule);
       }
-      if (!player || !media || media.paused || !url || !player.isConnected) continue;
+      if (!player || !media || !url || !player.isConnected) continue;
 
+      let control = player.querySelector('.anchor-yt-preview-control');
+      let button = control?.querySelector('.anchor-yt-preview-button');
+      if (!button && media.paused) continue;
+      const controls = player.querySelector('.ytInlinePlayerControlsTopRightControls');
+      if (!controls && !control) continue;
       activePlayers.add(player);
-      let button = player.querySelector('.anchor-yt-preview-button');
-      if (!button) {
+      if (!control || !button) {
+        if (!controls) continue;
+        control?.remove();
+        control = document.createElement('div');
+        control.className = 'ytInlinePlayerControlsTopRightControlsCircleButton anchor-yt-preview-control';
+        const icon = document.createElement('div');
+        icon.className = 'ytInlinePlayerControlsButtonIcon';
         button = document.createElement('button');
         button.type = 'button';
-        button.className = 'anchor-yt-button anchor-yt-preview-button';
-        button.innerHTML = `${PREVIEW_ICON}<span class="anchor-yt-label">Download with Anchor</span>`;
+        button.className = 'ytmClosedCaptioningButtonButton anchor-yt-preview-button';
+        button.innerHTML = PREVIEW_ICON;
         button.addEventListener('click', (event) => {
           event.preventDefault();
           event.stopPropagation();
           send(button.dataset.url, button);
         });
-        player.append(button);
+        icon.append(button);
+        control.append(icon);
+        controls.append(control);
       }
+      if (controls && control.parentElement !== controls) controls.append(control);
       button.dataset.url = url;
       // Keep an accessible name without showing the browser's large native tooltip over the preview.
       button.title = '';
       button.setAttribute('aria-label', 'Download this video with Anchor');
     }
-    document.querySelectorAll('.anchor-yt-preview-button').forEach((button) => {
-      if (!activePlayers.has(button.closest('#inline-preview-player'))) button.remove();
+    document.querySelectorAll('.anchor-yt-preview-control').forEach((control) => {
+      if (activePlayers.has(control.closest('#inline-preview-player'))) {
+        clearTimeout(control._anchorRemovalTimer);
+        control._anchorRemovalTimer = null;
+      } else if (!control._anchorRemovalTimer) {
+        // Let the preview's native controls finish their short fade before removing ours with them.
+        control._anchorRemovalTimer = setTimeout(() => control.remove(), 280);
+      }
     });
   }
 
