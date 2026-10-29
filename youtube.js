@@ -71,6 +71,16 @@
 
   // The compact control belongs to YouTube's playing hover preview, including Shorts previews.
   const observedPreviewVideos = new WeakSet();
+  const observedPreviews = new WeakSet();
+
+  function fadePreviewBackground(control) {
+    control.classList.remove('anchor-yt-preview-background-faded');
+    clearTimeout(control._anchorBackgroundTimer);
+    control._anchorBackgroundTimer = setTimeout(() => {
+      control.classList.add('anchor-yt-preview-background-faded');
+    }, 2200);
+  }
+
   function syncPreviews() {
     const previews = document.querySelectorAll('ytd-video-preview.ytdVideoPreviewActive');
     const activePlayers = new Set();
@@ -78,6 +88,13 @@
       const player = preview.querySelector('#inline-preview-player');
       const media = player?.querySelector('video');
       const url = previewVideoLink(preview);
+      if (!observedPreviews.has(preview)) {
+        observedPreviews.add(preview);
+        preview.addEventListener('pointermove', () => {
+          const current = preview.querySelector('.anchor-yt-preview-control');
+          if (current) fadePreviewBackground(current);
+        }, { passive: true });
+      }
       if (media && !observedPreviewVideos.has(media)) {
         observedPreviewVideos.add(media);
         media.addEventListener('play', schedule);
@@ -91,6 +108,7 @@
       if (!button && media.paused) continue;
       const controls = player.querySelector('.ytInlinePlayerControlsTopRightControls');
       activePlayers.add(player);
+      let createdControl = false;
       if (!control || !button) {
         control?.remove();
         control = document.createElement('div');
@@ -108,14 +126,31 @@
         });
         icon.append(button);
         control.append(icon);
+        createdControl = true;
       }
       // Keep the control outside YouTube's fixed-height stack, which clips extra children.
       if (control.parentElement !== player) player.append(control);
       const playerRect = player.getBoundingClientRect();
       const controlsRect = controls?.getBoundingClientRect();
-      control.style.top = `${Math.max(0, controlsRect?.height ? controlsRect.bottom - playerRect.top : 112)}px`;
-      control.style.right = `${Math.max(0, controlsRect?.width ? playerRect.right - controlsRect.right : 12)}px`;
+      const sourceHref = preview.querySelector('.ytdVideoPreviewMediaContainerLink[href]')?.getAttribute('href') || '';
+      const shortPreview = /^\/shorts\//.test(sourceHref)
+        || (media.videoWidth > 0 && media.videoHeight > media.videoWidth);
+      const muteButton = player.querySelector('.ytmMuteButtonButton');
+      const captionButton = player.querySelector('.ytmClosedCaptioningButtonButton');
+      const muteRect = muteButton?.getBoundingClientRect();
+      const captionRect = captionButton?.getBoundingClientRect();
+      const muteVisible = muteRect?.width > 0 && muteRect?.height > 0;
+      const captionVisible = captionRect?.width > 0 && captionRect?.height > 0;
+      const shortControl = captionVisible ? captionRect : muteVisible ? muteRect : null;
+      const top = shortPreview
+        ? (shortControl ? shortControl.bottom - playerRect.top + 4 : 56)
+        : (controlsRect?.height ? controlsRect.bottom - playerRect.top : 112);
+      const right = controlsRect?.width ? playerRect.right - controlsRect.right
+        : muteVisible ? playerRect.right - muteRect.right : 12;
+      control.style.top = `${Math.max(0, top)}px`;
+      control.style.right = `${Math.max(0, right)}px`;
       control.style.opacity = controls ? getComputedStyle(controls).opacity : '1';
+      if (createdControl) fadePreviewBackground(control);
       button.dataset.url = url;
       // Keep an accessible name without showing the browser's large native tooltip over the preview.
       button.title = '';
@@ -127,7 +162,10 @@
         control._anchorRemovalTimer = null;
       } else if (!control._anchorRemovalTimer) {
         // Let the preview's native controls finish their short fade before removing ours with them.
-        control._anchorRemovalTimer = setTimeout(() => control.remove(), 280);
+        control._anchorRemovalTimer = setTimeout(() => {
+          clearTimeout(control._anchorBackgroundTimer);
+          control.remove();
+        }, 280);
       }
     });
   }

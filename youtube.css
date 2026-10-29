@@ -137,6 +137,26 @@ html[dark] .anchor-yt-overlay .anchor-yt-button:hover {
   transition: opacity 0.25s cubic-bezier(0, 0, 0.2, 1);
 }
 
+.anchor-yt-preview-control::before {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 50%;
+  background: rgba(33, 33, 33, 0.78);
+  content: "";
+  opacity: 1;
+  pointer-events: none;
+  transition: opacity 0.25s cubic-bezier(0, 0, 0.2, 1);
+}
+
+.anchor-yt-preview-control.anchor-yt-preview-background-faded::before {
+  opacity: 0;
+}
+
+.anchor-yt-preview-control .ytInlinePlayerControlsButtonIcon {
+  z-index: 1;
+}
+
 .anchor-yt-preview-button {
   display: flex;
   align-items: center;
