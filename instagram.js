@@ -25,8 +25,12 @@
   }
 
   function restoreLoading(button) {
-    const pending = pendingDownloads.get(button.dataset.loadingKey);
-    if (pending) applyLoading(button, pending.label);
+    const label = pendingDownloads.get(button.dataset.loadingKey);
+    if (label) applyLoading(button, label);
+  }
+
+  function afterLoadingPaint() {
+    return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   }
 
   function reelLink() {
@@ -38,8 +42,7 @@
   function beginSending(button, label = 'Sending to Anchor', key = button.dataset.loadingKey) {
     key = key || loadingKey(button.dataset.url || location.href);
     button.dataset.loadingKey = key;
-    const previous = pendingDownloads.get(key);
-    pendingDownloads.set(key, { label, startedAt: previous?.startedAt ?? Date.now() });
+    pendingDownloads.set(key, label);
     const matchingButtons = [...document.querySelectorAll('.anchor-ig-button')]
       .filter((candidate) => candidate.dataset.loadingKey === key);
     if (!matchingButtons.includes(button)) matchingButtons.push(button);
@@ -48,35 +51,30 @@
 
   function finishSending(button, ok, failureLabel = 'Anchor isn’t running') {
     const key = button.dataset.loadingKey;
-    const pending = key && pendingDownloads.get(key);
-    const minimumLoadingMs = 900;
-    const wait = pending ? Math.max(0, minimumLoadingMs - (Date.now() - pending.startedAt)) : 0;
+    if (key) pendingDownloads.delete(key);
+    const matchingButtons = key
+      ? [...document.querySelectorAll('.anchor-ig-button')].filter((candidate) => candidate.dataset.loadingKey === key)
+      : [];
+    if (!matchingButtons.includes(button)) matchingButtons.push(button);
+    matchingButtons.forEach((candidate) => {
+      candidate.classList.remove('anchor-ig-sending');
+      candidate.disabled = false;
+      candidate.removeAttribute('aria-busy');
+      candidate.setAttribute('aria-label', ok ? 'Sent to Anchor' : failureLabel);
+      candidate.classList.toggle('anchor-ig-failed', !ok);
+    });
     setTimeout(() => {
-      if (key && pendingDownloads.get(key) !== pending) return;
-      if (key) pendingDownloads.delete(key);
-      const matchingButtons = key
-        ? [...document.querySelectorAll('.anchor-ig-button')].filter((candidate) => candidate.dataset.loadingKey === key)
-        : [];
-      if (!matchingButtons.includes(button)) matchingButtons.push(button);
       matchingButtons.forEach((candidate) => {
-        candidate.classList.remove('anchor-ig-sending');
-        candidate.disabled = false;
-        candidate.removeAttribute('aria-busy');
-        candidate.setAttribute('aria-label', ok ? 'Sent to Anchor' : failureLabel);
-        candidate.classList.toggle('anchor-ig-failed', !ok);
+        if (candidate.getAttribute('aria-busy') === 'true') return;
+        candidate.setAttribute('aria-label', candidate.title);
+        candidate.classList.remove('anchor-ig-failed');
       });
-      setTimeout(() => {
-        matchingButtons.forEach((candidate) => {
-          if (candidate.getAttribute('aria-busy') === 'true') return;
-          candidate.setAttribute('aria-label', candidate.title);
-          candidate.classList.remove('anchor-ig-failed');
-        });
-      }, 2500);
-    }, wait);
+    }, 2500);
   }
 
-  function send(url, button, filename) {
+  async function send(url, button, filename) {
     beginSending(button);
+    await afterLoadingPaint();
     chrome.runtime.sendMessage({ type: 'anchor-download', url, filename, referrer: location.href }, (reply) => {
       const ok = !chrome.runtime.lastError && reply?.ok;
       finishSending(button, ok);
@@ -108,6 +106,7 @@
   async function sendCarouselVideo(shortcode, index, button) {
     beginSending(button, 'Finding this carousel video', `instagram:${shortcode}`);
     try {
+      await afterLoadingPaint();
       const url = await resolveCarouselVideo(shortcode, index);
       beginSending(button, 'Sending to Anchor', `instagram:${shortcode}`);
       // Let Anchor derive the name and category from the CDN's .mp4 response. A suggestedName bypasses
