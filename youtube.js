@@ -310,14 +310,21 @@
     syncPreviews();
     const wanted = plan();
     let root = document.getElementById(ROOT_ID);
-    if (!wanted || isFullscreen()) {
+    if (!wanted) {
       root?.remove();
       document.querySelectorAll('.anchor-yt-menu').forEach((menu) => menu.remove());
       return;
     }
     const [key, build] = wanted;
     const target = anchorPoint();
+    const fullscreen = isFullscreen();
     const shorts = location.pathname.startsWith('/shorts/');
+    // In fullscreen, keep the download button in the watch action row beside Like/Dislike;
+    // never fall back to a floating button over the video itself.
+    if (fullscreen && !target) {
+      root?.remove();
+      return;
+    }
     // Shorts has a dedicated action rail; never place a floating fallback over its video.
     if (shorts && !target) {
       root?.remove();
