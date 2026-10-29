@@ -82,16 +82,13 @@
   }
 
   function revealPreviewBackground(event) {
-    const preview = event.composedPath().find((node) =>
-      node instanceof Element && node.matches('ytd-video-preview.ytdVideoPreviewActive'));
-    const control = preview?.querySelector('.anchor-yt-preview-control');
+    const control = event.composedPath().find((node) =>
+      node instanceof Element && node.matches('.anchor-yt-preview-control'));
     if (control) fadePreviewBackground(control);
   }
 
-  // Capture events from YouTube's nested player/video controls so movement over the preview
-  // reveals the Anchor background just like movement over the button itself.
+  // Reveal the background only when the pointer reaches the Anchor icon.
   document.addEventListener('pointerover', revealPreviewBackground, { capture: true, passive: true });
-  document.addEventListener('pointermove', revealPreviewBackground, { capture: true, passive: true });
 
   function syncPreviews() {
     const previews = document.querySelectorAll('ytd-video-preview.ytdVideoPreviewActive');
