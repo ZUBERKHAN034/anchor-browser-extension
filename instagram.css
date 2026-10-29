@@ -68,3 +68,38 @@
 .anchor-ig-button.anchor-ig-failed {
   color: #ff9d82;
 }
+
+/* In-feed video posts keep the download mark beside Instagram's Save action without changing row layout. */
+.anchor-ig-save-slot {
+  position: relative !important;
+  overflow: visible !important;
+}
+
+.anchor-ig-feed-control {
+  position: absolute !important;
+  z-index: 2;
+  top: 50%;
+  right: calc(100% + 8px);
+  display: flex;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+}
+
+.anchor-ig-feed-button {
+  width: 24px;
+  height: 24px;
+}
+
+.anchor-ig-feed-button .anchor-ig-mark,
+.anchor-ig-feed-button .anchor-ig-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.anchor-ig-feed-button .anchor-ig-spinner {
+  inset: -2px;
+}
