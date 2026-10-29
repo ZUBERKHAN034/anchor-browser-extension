@@ -302,13 +302,14 @@
       || document.querySelector('#movie_player.ytp-fullscreen, ytd-watch-flexy[fullscreen], ytd-player[fullscreen]'));
   }
 
-  function positionFullscreenButton(root, actions) {
+  function positionFullscreenButton(root, actions, refreshFadeWatch = true) {
     const player = document.querySelector('#movie_player');
     const playerRect = player?.getBoundingClientRect();
     if (!playerRect) return;
 
     // Fullscreen has its own quick-action bar, separate from the hidden metadata action row.
     const fullscreenLikeButton = player.querySelector('yt-player-quick-action-buttons button');
+    const fullscreenActions = fullscreenLikeButton?.closest('.ytp-fullscreen-quick-actions');
     const likeControl = fullscreenLikeButton || actions?.querySelector(
       'segmented-like-dislike-button-view-model, like-button-view-model, ytd-segmented-like-dislike-button-renderer',
     ) || actions?.firstElementChild;
@@ -327,6 +328,25 @@
     root.style.top = `${Math.max(8, top)}px`;
     root.style.right = 'auto';
     root.style.bottom = 'auto';
+
+    if (fullscreenActions) {
+      if (refreshFadeWatch) root._anchorFadeWatchUntil = performance.now() + 350;
+      const nativeStyle = getComputedStyle(fullscreenActions);
+      const opacity = !fullscreenLikeButton || nativeStyle.display === 'none'
+        || nativeStyle.visibility === 'hidden'
+        ? 0
+        : Math.max(0, Math.min(1, Number.parseFloat(nativeStyle.opacity) || 0));
+      root.style.opacity = String(opacity);
+      root.style.pointerEvents = opacity > 0.05 ? 'auto' : 'none';
+      const stillWatching = performance.now() < (root._anchorFadeWatchUntil || 0);
+      const midFade = opacity > 0.01 && opacity < 0.99;
+      if ((stillWatching || midFade) && !root._anchorFullscreenFadeFrame) {
+        root._anchorFullscreenFadeFrame = requestAnimationFrame(() => {
+          root._anchorFullscreenFadeFrame = 0;
+          if (root.isConnected) positionFullscreenButton(root, actions, false);
+        });
+      }
+    }
   }
 
   function fullscreenHost() {

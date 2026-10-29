@@ -239,11 +239,11 @@ html[dark] .anchor-yt-overlay .anchor-yt-button:hover {
   padding: 0;
   border-radius: 50%;
   color: #fff;
-  background: rgba(33, 33, 33, 0.78);
+  background: rgba(33, 33, 33, 0.86);
 }
 
 .anchor-yt-fullscreen .anchor-yt-button:hover {
-  background: rgba(33, 33, 33, 0.92);
+  background: rgba(33, 33, 33, 0.94);
 }
 
 .anchor-yt-fullscreen .anchor-yt-label,
