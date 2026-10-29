@@ -88,6 +88,42 @@
     }
   }
 
+  function videoIdFrom(raw) {
+    if (!raw) return null;
+    try {
+      const url = new URL(raw, location.origin);
+      return url.searchParams.get('v') || url.pathname.match(/^\/shorts\/([^/]+)/)?.[1] || null;
+    } catch {
+      return null;
+    }
+  }
+
+  const previewCardSelector = [
+    'ytd-playlist-video-renderer',
+    'ytd-playlist-panel-video-renderer',
+    'ytd-playlist-renderer',
+    'ytd-grid-playlist-renderer',
+    'ytd-compact-playlist-renderer',
+    'ytd-playlist-thumbnail',
+    'ytd-rich-item-renderer',
+    'ytd-rich-grid-media',
+    'yt-lockup-view-model',
+    'yt-playlist-lockup-view-model',
+  ].join(', ');
+  let hoveredPlaylistContext = null;
+
+  // YouTube portals the hover player outside its source card, so the preview no longer has an
+  // ancestor link to the playlist. Remember the playlist on the card that opened the preview.
+  document.addEventListener('pointerover', (event) => {
+    const target = event.composedPath().find((node) => node instanceof Element);
+    if (!target || target.closest('ytd-video-preview')) return;
+    const card = target.closest(previewCardSelector);
+    if (!card) return;
+    const links = [...card.querySelectorAll('a[href]')];
+    const playlist = links.map((link) => playlistUrlFrom(link.href)).find(Boolean);
+    hoveredPlaylistContext = playlist ? { url: playlist, at: Date.now() } : null;
+  }, { capture: true, passive: true });
+
   function previewPlaylistLink(preview, sourceHref) {
     const currentPlaylist = playlistLink();
     if (currentPlaylist) return currentPlaylist;
@@ -145,6 +181,38 @@
       for (const link of node.querySelectorAll('a[href]')) {
         const list = playlistUrlFrom(link.href);
         if (list) return list;
+      }
+    }
+
+    if (hoveredPlaylistContext && Date.now() - hoveredPlaylistContext.at < 15000) {
+      return hoveredPlaylistContext.url;
+    }
+
+    // YouTube portals hover previews out of their cards. Playlist cards can also be rendered with
+    // newer lockup elements rather than the older ytd-* renderer tags, so search playlist links
+    // across the page and walk each link's card wrapper to find the one containing this video.
+    const videoId = videoIdFrom(preview.querySelector('.ytp-title-link')?.href)
+      || videoIdFrom(sourceHref);
+    if (videoId) {
+      const playlistLinks = document.querySelectorAll('a[href*="list="], [playlist-id], [data-playlist-id], [data-list-id]');
+      for (const source of playlistLinks) {
+        const sourceList = playlistUrlFrom(source.href || '')
+          || playlistUrlFromId(source.getAttribute('playlist-id'))
+          || playlistUrlFromId(source.getAttribute('data-playlist-id'))
+          || playlistUrlFromId(source.getAttribute('data-list-id'));
+        if (!sourceList) continue;
+
+        let card = source.closest(previewCardSelector);
+        // Some playlist link variants live on an element just outside the renderer. Climb a few
+        // levels and use the closest wrapper that also contains the preview video's link.
+        for (let node = card || source, depth = 0; node && depth < 5; node = node.parentElement, depth += 1) {
+          const links = [...node.querySelectorAll('a[href]')];
+          const containsVideo = links.some((link) => videoIdFrom(link.href) === videoId);
+          if (containsVideo) return sourceList;
+          if (depth > 0 && node.matches('ytd-rich-grid-renderer, ytd-browse, ytd-page-manager, ytd-app')) break;
+          if (card && node === card.parentElement) break;
+          if (!card && node.matches(previewCardSelector)) card = node;
+        }
       }
     }
     return null;
