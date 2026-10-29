@@ -151,18 +151,21 @@
       const lastNativeControl = captionRect || muteRect;
       const playlistQuickPreview = location.pathname === '/playlist'
         || !!playlistLink()
-        || !!preview.closest('ytd-playlist-panel-video-renderer');
+        || !!preview.closest('ytd-playlist-panel-video-renderer, ytd-playlist-video-renderer')
+        || /[?&]list=/.test(sourceHref);
       const top = lastNativeControl
         ? lastNativeControl.bottom - playerRect.top + 4
-        : playlistQuickPreview && controlsRect?.height
-          ? controlsRect.top - playerRect.top + 4
+        : playlistQuickPreview
+          ? 16
           : shortPreview ? 56 : (controlsRect?.height ? controlsRect.bottom - playerRect.top : 112);
       const right = lastNativeControl
         ? playerRect.right - lastNativeControl.right + 4
-        : controlsRect?.width ? playerRect.right - controlsRect.right + (playlistQuickPreview ? 4 : 0) : 12;
+        : playlistQuickPreview ? 16
+          : controlsRect?.width ? playerRect.right - controlsRect.right : 12;
       control.style.top = `${Math.max(0, top)}px`;
       control.style.right = `${Math.max(0, right)}px`;
-      if (createdControl) fadePreviewBackground(control);
+      const videoChanged = button.dataset.url && button.dataset.url !== url;
+      if (createdControl || videoChanged) fadePreviewBackground(control);
       button.dataset.url = url;
       // Keep an accessible name without showing the browser's large native tooltip over the preview.
       button.title = '';
