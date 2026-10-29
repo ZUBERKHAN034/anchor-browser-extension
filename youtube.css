@@ -232,18 +232,18 @@ html[dark] .anchor-yt-overlay .anchor-yt-button:hover {
   gap: 0;
 }
 
-.anchor-yt-fullscreen .anchor-yt-button {
+#anchor-yt.anchor-yt-fullscreen .anchor-yt-button {
   width: 40px;
   min-width: 40px;
   height: 40px;
   padding: 0;
   border-radius: 50%;
   color: #fff;
-  background: #242123;
+  background: #242123 !important;
 }
 
-.anchor-yt-fullscreen .anchor-yt-button:hover {
-  background: #242123;
+#anchor-yt.anchor-yt-fullscreen .anchor-yt-button:hover {
+  background: #242123 !important;
 }
 
 .anchor-yt-fullscreen .anchor-yt-label,
