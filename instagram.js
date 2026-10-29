@@ -32,8 +32,14 @@
   function visible(el) {
     const rect = el.getBoundingClientRect();
     const style = getComputedStyle(el);
-    return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < innerHeight
-      && style.visibility !== 'hidden' && style.display !== 'none';
+    if (rect.width <= 0 || rect.height <= 0 || rect.bottom <= 0 || rect.top >= innerHeight
+        || style.visibility === 'hidden' || style.display === 'none') return false;
+
+    // A Reel opened from the feed leaves its post behind a full-screen overlay. Ignore those
+    // background Like icons; the action rail we want must be the one receiving pointer events.
+    const button = el.closest('button, [role="button"]');
+    const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    return !!button && !!hit && button.contains(hit);
   }
 
   function rendered(el) {
