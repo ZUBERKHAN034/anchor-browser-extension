@@ -135,20 +135,24 @@
       if (control.parentElement !== player) player.append(control);
       const playerRect = player.getBoundingClientRect();
       const controlsRect = controls?.getBoundingClientRect();
-      const muteButton = player.querySelector('.ytmMuteButtonButton')
-        || preview.querySelector('.ytmMuteButtonButton');
-      const captionButton = player.querySelector('.ytmClosedCaptioningButtonButton')
-        || preview.querySelector('.ytmClosedCaptioningButtonButton');
-      const muteRect = muteButton?.getBoundingClientRect();
-      const captionRect = captionButton?.getBoundingClientRect();
-      const muteVisible = muteRect?.width > 0 && muteRect?.height > 0;
-      const captionVisible = captionRect?.width > 0 && captionRect?.height > 0;
-      const shortControl = captionVisible ? captionRect : muteVisible ? muteRect : null;
-      const top = shortPreview
-        ? (shortControl ? shortControl.bottom - playerRect.top + 4 : 56)
-        : (controlsRect?.height ? controlsRect.bottom - playerRect.top : 112);
-      const right = controlsRect?.width ? playerRect.right - controlsRect.right
-        : muteVisible ? playerRect.right - muteRect.right : 12;
+      const visibleNativeRect = (selector) => {
+        for (const root of [player, preview]) {
+          for (const element of root.querySelectorAll(selector)) {
+            const rect = element.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) return rect;
+          }
+        }
+        return null;
+      };
+      const muteRect = visibleNativeRect('.ytmMuteButtonButton');
+      const captionRect = visibleNativeRect('.ytmClosedCaptioningButtonButton');
+      const lastNativeControl = captionRect || muteRect;
+      const top = lastNativeControl
+        ? lastNativeControl.bottom - playerRect.top + 4
+        : shortPreview ? 56 : (controlsRect?.height ? controlsRect.bottom - playerRect.top : 112);
+      const right = lastNativeControl
+        ? playerRect.right - lastNativeControl.right + 4
+        : controlsRect?.width ? playerRect.right - controlsRect.right : 12;
       control.style.top = `${Math.max(0, top)}px`;
       control.style.right = `${Math.max(0, right)}px`;
       if (createdControl) fadePreviewBackground(control);
