@@ -173,7 +173,20 @@
     });
   }
 
-  window.addEventListener('popstate', schedule);
+  let currentRoute = `${location.pathname}${location.search}`;
+  function syncAfterRouteChange() {
+    const nextRoute = `${location.pathname}${location.search}`;
+    if (nextRoute === currentRoute) return;
+    currentRoute = nextRoute;
+    for (const delay of [0, 100, 300, 700, 1400, 2200]) setTimeout(schedule, delay);
+  }
+
+  window.addEventListener('popstate', () => {
+    currentRoute = `${location.pathname}${location.search}`;
+    for (const delay of [0, 100, 300, 700, 1400, 2200]) setTimeout(schedule, delay);
+  });
+  // Instagram uses pushState for feed-to-Reel navigation, which doesn't fire popstate.
+  setInterval(syncAfterRouteChange, 250);
   document.addEventListener('fullscreenchange', schedule);
   new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true });
   schedule();
