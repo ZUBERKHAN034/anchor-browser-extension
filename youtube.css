@@ -255,33 +255,33 @@ html[dark] .anchor-yt-overlay .anchor-yt-button:hover {
 
 /* Playlist fullscreen control matches YouTube's wide pill with the Anchor mark and dropdown cue. */
 #anchor-yt.anchor-yt-fullscreen.anchor-yt-has-menu {
-  width: 116px;
-  height: 80px;
+  width: 88px;
+  height: 56px;
 }
 
 #anchor-yt.anchor-yt-fullscreen.anchor-yt-has-menu .anchor-yt-button {
   display: inline-flex;
-  width: 116px;
-  min-width: 116px;
-  height: 80px;
-  padding: 0 14px;
-  gap: 12px;
+  width: 88px;
+  min-width: 88px;
+  height: 56px;
+  padding: 0 10px;
+  gap: 8px;
   justify-content: center;
-  border-radius: 40px;
+  border-radius: 28px;
   background: #292729 !important;
 }
 
 #anchor-yt.anchor-yt-fullscreen.anchor-yt-has-menu .anchor-yt-mark,
 #anchor-yt.anchor-yt-fullscreen.anchor-yt-has-menu .anchor-yt-icon {
-  width: 48px;
-  height: 48px;
+  width: 32px;
+  height: 32px;
 }
 
 #anchor-yt.anchor-yt-fullscreen.anchor-yt-has-menu .anchor-yt-chevron {
   position: static;
   display: inline-flex;
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   align-items: center;
   justify-content: center;
   color: #fff;
@@ -290,8 +290,8 @@ html[dark] .anchor-yt-overlay .anchor-yt-button:hover {
 }
 
 #anchor-yt.anchor-yt-fullscreen.anchor-yt-has-menu .anchor-yt-chevron svg {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
 }
 
 .anchor-yt-button.anchor-yt-failed {
