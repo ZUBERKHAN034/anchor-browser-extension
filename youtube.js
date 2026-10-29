@@ -278,7 +278,12 @@
         control.append(icon);
         attachMenu(control, button, 'Anchor', () => {
           const videoUrl = button.dataset.url;
-          const listUrl = button.dataset.playlistUrl;
+          // YouTube can mount the preview before its source playlist card finishes populating.
+          // Resolve once more on click so the quick-view menu sees the final card/URL state.
+          const livePreview = button.closest('ytd-video-preview') || preview;
+          const liveSourceHref = livePreview.querySelector('.ytdVideoPreviewMediaContainerLink[href]')?.getAttribute('href') || '';
+          const listUrl = previewPlaylistLink(livePreview, liveSourceHref) || button.dataset.playlistUrl;
+          button.dataset.playlistUrl = listUrl || '';
           return listUrl
             ? [['This Video', videoUrl], ['Whole playlist', listUrl]]
             : [['This Video', videoUrl]];
