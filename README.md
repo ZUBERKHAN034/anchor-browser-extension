@@ -11,8 +11,8 @@
 - **Takes over downloads**: new browser downloads go to Anchor for faster, resumable, multi-connection downloading.
 - **Starts Anchor when needed**: if Anchor isn't running, the extension launches it through its native messaging host.
 - **Download with Anchor**: a context menu item for any link.
-- **YouTube buttons**: an Anchor icon next to Like and Share downloads a video or Short, or offers the whole playlist when the video plays from one; playlist pages get an Anchor download button. A white Anchor mark also appears in the controls of playing hover previews, including Shorts previews.
-- **Instagram button**: An Anchor icon appears before Like in the action rail for Reels, videos, and video slides in carousels. Click the Anchor icon to send the media to Anchor for download.
+- **YouTube buttons**: an Anchor icon next to Like and Share downloads a video or Short, or offers the whole playlist when the video plays from one; playlist pages get an Anchor download button. Hovering any video thumbnail shows an Anchor icon in its corner, which stays in the hover preview, including Shorts previews.
+- **Instagram button**: an Anchor icon appears before Like in the Reel viewer's action rail, and beside Save on feed videos, video slides in carousels, and profile or Explore posts. Click the Anchor icon to send the media to Anchor for download.
 - **Falls back safely**: when Anchor is off or unavailable, the browser downloads the file itself.
 - **Toggle**: turn sending on or off from the toolbar popup.
 
