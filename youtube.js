@@ -73,54 +73,13 @@
   const observedPreviewVideos = new WeakSet();
   const observedPreviews = new WeakSet();
 
-  let previewFadeFrame = 0;
-
-  function previewControlOpacity(control) {
-    const player = control.closest('#inline-preview-player');
-    const preview = player?.closest('ytd-video-preview');
-    if (!player) return 1;
-    const roots = [player, preview].filter(Boolean);
-    const visible = (element) => {
-      const rect = element.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0;
-    };
-    // YouTube often fades the whole top-right control group, leaving each child at opacity 1.
-    const source = roots.flatMap((root) => [...root.querySelectorAll('.ytInlinePlayerControlsTopRightControls')])
-      .find(visible)
-      || roots.flatMap((root) => [...root.querySelectorAll('.ytmClosedCaptioningButtonButton, .ytmMuteButtonButton')])
-        .find(visible);
-    if (!source) return 1;
-
-    let opacity = 1;
-    const boundary = source.closest('#inline-preview-player') || preview;
-    for (let element = source; element; element = element.parentElement) {
-      const style = getComputedStyle(element);
-      if (style.display === 'none' || style.visibility === 'hidden') return 0;
-      opacity *= Number.parseFloat(style.opacity) || 0;
-      if (element === boundary) break;
-    }
-    return Math.max(0, Math.min(1, opacity));
-  }
-
-  function syncPreviewBackgrounds() {
-    let transitioning = false;
-    const now = performance.now();
-    document.querySelectorAll('.anchor-yt-preview-control').forEach((control) => {
-      const opacity = previewControlOpacity(control);
-      control.style.setProperty('--anchor-preview-background-opacity', String(opacity));
-      control.classList.toggle('anchor-yt-preview-background-faded', opacity < 0.01);
-      transitioning ||= opacity > 0.01 && opacity < 0.99;
-      transitioning ||= now < (control._anchorFadeWatchUntil || 0);
-    });
-    previewFadeFrame = transitioning ? requestAnimationFrame(syncPreviewBackgrounds) : 0;
-  }
-
-  function schedulePreviewBackgroundSync() {
-    document.querySelectorAll('.anchor-yt-preview-control').forEach((control) => {
-      // YouTube delays its autohide after pointer activity, then animates the native control group.
-      control._anchorFadeWatchUntil = performance.now() + 2600;
-    });
-    if (!previewFadeFrame) previewFadeFrame = requestAnimationFrame(syncPreviewBackgrounds);
+  function fadePreviewBackground(control) {
+    control.classList.remove('anchor-yt-preview-background-faded');
+    clearTimeout(control._anchorBackgroundTimer);
+    // YouTube autohides preview controls shortly after pointer activity stops.
+    control._anchorBackgroundTimer = setTimeout(() => {
+      control.classList.add('anchor-yt-preview-background-faded');
+    }, 2200);
   }
 
   function syncPreviews() {
@@ -134,7 +93,8 @@
         observedPreviews.add(preview);
         for (const eventName of ['pointermove', 'pointerenter', 'pointerleave']) {
           preview.addEventListener(eventName, () => {
-            if (preview.querySelector('.anchor-yt-preview-control')) schedulePreviewBackgroundSync();
+            const current = preview.querySelector('.anchor-yt-preview-control');
+            if (current) fadePreviewBackground(current);
           }, { passive: true });
         }
       }
@@ -198,7 +158,7 @@
         : controlsRect?.width ? playerRect.right - controlsRect.right : 12;
       control.style.top = `${Math.max(0, top)}px`;
       control.style.right = `${Math.max(0, right)}px`;
-      if (createdControl) schedulePreviewBackgroundSync();
+      if (createdControl) fadePreviewBackground(control);
       button.dataset.url = url;
       // Keep an accessible name without showing the browser's large native tooltip over the preview.
       button.title = '';
@@ -211,11 +171,11 @@
       } else if (!control._anchorRemovalTimer) {
         // Let the preview's native controls finish their short fade before removing ours with them.
         control._anchorRemovalTimer = setTimeout(() => {
+          clearTimeout(control._anchorBackgroundTimer);
           control.remove();
         }, 280);
       }
     });
-    schedulePreviewBackgroundSync();
   }
 
   // "This video" or "Whole playlist", under the button. It lives on the page body at a fixed position, since
