@@ -64,9 +64,10 @@
     beginSending(button, 'Finding this carousel video');
     try {
       const url = await resolveCarouselVideo(shortcode, index);
-      const filename = `Instagram-${shortcode}-slide-${index}.mp4`;
       button.setAttribute('aria-label', 'Sending to Anchor');
-      chrome.runtime.sendMessage({ type: 'anchor-download', url, filename, referrer: location.href }, (reply) => {
+      // Let Anchor derive the name and category from the CDN's .mp4 response. A suggestedName bypasses
+      // Anchor's automatic category detection and leaves direct CDN files marked as Other.
+      chrome.runtime.sendMessage({ type: 'anchor-download', url, referrer: location.href }, (reply) => {
         const ok = !chrome.runtime.lastError && reply?.ok;
         finishSending(button, ok, 'Couldn’t find this video');
       });
