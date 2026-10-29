@@ -80,8 +80,19 @@
 
   function playlistUrlFrom(raw) {
     if (!raw) return null;
+    // Read the raw query too: YouTube's quick-view links can be copied into hrefs as
+    // `...?v=VIDEO&amp;list=PLAYLIST`, and the playlist parameter may follow `&list=`.
+    const rawList = String(raw).match(/[?&](?:amp;)?list=([^&#]+)/i)?.[1];
+    if (rawList) {
+      try {
+        const list = decodeURIComponent(rawList.replace(/&amp;/gi, '&'));
+        const fromRawQuery = playlistUrlFromId(list);
+        if (fromRawQuery) return fromRawQuery;
+      } catch {}
+    }
     try {
-      const list = new URL(raw, location.origin).searchParams.get('list');
+      const normalized = String(raw).replace(/&amp;/gi, '&');
+      const list = new URL(normalized, location.origin).searchParams.get('list');
       return playlistUrlFromId(list);
     } catch {
       return null;
@@ -282,7 +293,11 @@
           // Resolve once more on click so the quick-view menu sees the final card/URL state.
           const livePreview = button.closest('ytd-video-preview') || preview;
           const liveSourceHref = livePreview.querySelector('.ytdVideoPreviewMediaContainerLink[href]')?.getAttribute('href') || '';
-          const listUrl = previewPlaylistLink(livePreview, liveSourceHref) || button.dataset.playlistUrl;
+          const videoHref = livePreview.querySelector('.ytp-title-link[href], .ytdVideoPreviewMediaContainerLink[href]')?.getAttribute('href') || '';
+          const listUrl = playlistUrlFrom(liveSourceHref)
+            || playlistUrlFrom(videoHref)
+            || previewPlaylistLink(livePreview, liveSourceHref)
+            || button.dataset.playlistUrl;
           button.dataset.playlistUrl = listUrl || '';
           return listUrl
             ? [['This Video', videoUrl], ['Whole playlist', listUrl]]
