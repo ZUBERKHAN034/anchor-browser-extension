@@ -1,7 +1,7 @@
-// Adds an Anchor button to the Reel action rail and to video posts, immediately before Save.
+// Adds an Anchor button to the Reel viewer's action rail, before Like, and to video posts, beside Save.
 (() => {
   const ROOT_ID = 'anchor-ig';
-  const ICON = `<span class="anchor-ig-mark"><img class="anchor-ig-icon" src="${chrome.runtime.getURL('icon128.png')}" alt=""><span class="anchor-ig-spinner" aria-hidden="true"></span></span>`;
+  const ICON = `<span class="anchor-ig-mark"><img class="anchor-ig-icon" src="${ANCHOR_ICON}" alt=""><span class="anchor-ig-spinner" aria-hidden="true"></span></span>`;
   const LIKE_ICONS = 'svg[aria-label="Like"], svg[aria-label="Unlike"]';
   const OTHER_ACTION_ICONS = ["Comment", "Share", "Save", "More"]
     .map((name) => `svg[aria-label="${name}"]`).join(', ');
@@ -10,8 +10,11 @@
 
   function loadingKey(url) {
     try {
-      const match = new URL(url).pathname.match(/^\/(?:reel|reels|p)\/([^/]+)/);
-      return match ? `instagram:${match[1]}` : url;
+      const parsed = new URL(url);
+      const match = parsed.pathname.match(/^\/(?:reel|reels|p)\/([^/]+)/);
+      // Each carousel slide is its own download, so one slide's loading state must not show on another.
+      const slide = parsed.searchParams.get('img_index');
+      return match ? `instagram:${match[1]}${slide ? `:${slide}` : ''}` : url;
     } catch {
       return url;
     }
@@ -72,13 +75,18 @@
     }, 2500);
   }
 
-  async function send(url, button, filename) {
+  async function send(url, button) {
     beginSending(button);
     await afterLoadingPaint();
-    chrome.runtime.sendMessage({ type: 'anchor-download', url, filename, referrer: location.href }, (reply) => {
-      const ok = !chrome.runtime.lastError && reply?.ok;
-      finishSending(button, ok);
-    });
+    try {
+      chrome.runtime.sendMessage({ type: 'anchor-download', url, referrer: location.href }, (reply) => {
+        const ok = !chrome.runtime.lastError && reply?.ok;
+        finishSending(button, ok);
+      });
+    } catch {
+      // The extension was reloaded or updated since this page loaded; its old content script can't reach it.
+      finishSending(button, false);
+    }
   }
 
   function resolveCarouselVideo(shortcode, index) {
@@ -104,11 +112,11 @@
   }
 
   async function sendCarouselVideo(shortcode, index, button) {
-    beginSending(button, 'Finding this carousel video', `instagram:${shortcode}`);
+    beginSending(button, 'Finding this carousel video');
     try {
       await afterLoadingPaint();
       const url = await resolveCarouselVideo(shortcode, index);
-      beginSending(button, 'Sending to Anchor', `instagram:${shortcode}`);
+      beginSending(button, 'Sending to Anchor');
       // Let Anchor derive the name and category from the CDN's .mp4 response. A suggestedName bypasses
       // Anchor's automatic category detection and leaves direct CDN files marked as Other.
       chrome.runtime.sendMessage({ type: 'anchor-download', url, referrer: location.href }, (reply) => {

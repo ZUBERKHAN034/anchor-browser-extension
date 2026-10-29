@@ -1,13 +1,12 @@
 // Adds an Anchor button to YouTube. On a watch page it downloads the video; when the video plays from a playlist it
-// asks whether to take the video or the whole playlist. On a playlist page it downloads the playlist. In YouTube's
-// hover preview (quick view) it does the same: a playlist item offers "This video" or "Whole playlist". Anchor then
-// opens its New Download window to pick a quality (or, for a playlist, the videos).
+// asks whether to take the video or the whole playlist. On a playlist page it downloads the playlist. Hovering any
+// video's thumbnail shows a small button that does the same, and stays in YouTube's hover preview: a playlist item
+// offers "This video" or "Whole playlist". Anchor then opens its New Download window to pick a quality (or, for a
+// playlist, the videos).
 (() => {
   const ROOT_ID = 'anchor-yt';
   // The app icon, as on the Dock.
-  const ICON = `<span class="anchor-yt-mark"><img class="anchor-yt-icon" src="${chrome.runtime.getURL('icon128.png')}" alt=""><span class="anchor-yt-spinner" aria-hidden="true"></span></span>`;
-  // A white, transparent version of Anchor's mark for YouTube's hover player controls.
-  const PREVIEW_ICON = `<span class="anchor-yt-mark"><svg class="anchor-yt-preview-mark" viewBox="0 0 128 128" aria-hidden="true"><circle cx="64" cy="19" r="8"/><path d="M64 29v58M43 48h42M30 77c4 17 17 29 34 29s30-12 34-29M30 77l-2 16 15-7M98 77l2 16-15-7"/></svg><span class="anchor-yt-spinner" aria-hidden="true"></span></span>`;
+  const appIcon = () => `<span class="anchor-yt-mark"><img class="anchor-yt-icon" src="${ANCHOR_ICON}" alt=""><span class="anchor-yt-spinner" aria-hidden="true"></span></span>`;
   const CHEVRON = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M7 10l5 5 5-5" fill="none"
     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
@@ -28,22 +27,36 @@
   }
 
   // Hands a link to Anchor, showing how it went on the button for a moment.
+  // A second click while a send is under way is ignored, so the same link isn't sent twice.
   function send(url, button) {
+    if (button.getAttribute('aria-busy') === 'true') return;
+    // Put back the label a previous send replaced, so "Sent to Anchor" isn't taken as the idle one.
+    clearTimeout(button._anchorResetTimer);
+    if (button._anchorIdleLabel) button.setAttribute('aria-label', button._anchorIdleLabel);
     const idleLabel = button.getAttribute('aria-label') || button.title;
+    button._anchorIdleLabel = idleLabel;
     button.classList.add('anchor-yt-sending');
     button.setAttribute('aria-busy', 'true');
     button.setAttribute('aria-label', 'Sending to Anchor');
-    chrome.runtime.sendMessage({ type: 'anchor-download', url, referrer: location.href }, (reply) => {
-      const ok = !chrome.runtime.lastError && reply?.ok;
+    const finish = (ok) => {
       button.classList.remove('anchor-yt-sending');
       button.removeAttribute('aria-busy');
       button.setAttribute('aria-label', ok ? 'Sent to Anchor' : 'Anchor isn’t running');
       button.classList.toggle('anchor-yt-failed', !ok);
-      setTimeout(() => {
+      button._anchorResetTimer = setTimeout(() => {
         button.setAttribute('aria-label', idleLabel);
         button.classList.remove('anchor-yt-failed');
+        button._anchorIdleLabel = null;
       }, 2500);
-    });
+    };
+    try {
+      chrome.runtime.sendMessage({ type: 'anchor-download', url, referrer: location.href }, (reply) => {
+        finish(!chrome.runtime.lastError && reply?.ok);
+      });
+    } catch {
+      // The extension was reloaded or updated since this page loaded; its old content script can't reach it.
+      finish(false);
+    }
   }
 
   function makeButton(label, title, withMenu) {
@@ -52,7 +65,7 @@
     el.className = 'anchor-yt-button';
     el.title = title;
     el.setAttribute('aria-label', title);
-    el.innerHTML = `${ICON}<span class="anchor-yt-label">${label}</span>${withMenu ? `<span class="anchor-yt-chevron">${CHEVRON}</span>` : ''}`;
+    el.innerHTML = `${appIcon()}<span class="anchor-yt-label">${label}</span>${withMenu ? `<span class="anchor-yt-chevron">${CHEVRON}</span>` : ''}`;
     if (withMenu) el.setAttribute('aria-haspopup', 'menu');
     return el;
   }
@@ -73,33 +86,37 @@
     return null;
   }
 
-  // The link of the thumbnail the pointer last entered. YouTube has one shared preview element, so the item that
-  // opened it isn't an ancestor of it; this is how we know which item (and which playlist) it came from.
-  // Links inside the preview itself are skipped, so they can't overwrite a thumbnail link that carries the list.
-  let hoveredHref = '';
+  // The video items that get Anchor's hover button, and the thumbnail link inside each.
+  const ITEM = 'ytd-video-renderer, ytd-rich-item-renderer, ytd-compact-video-renderer, ytd-grid-video-renderer, '
+    + 'ytd-playlist-video-renderer, ytd-playlist-panel-video-renderer, yt-lockup-view-model, ytm-shorts-lockup-view-model';
+  const THUMB = 'a#thumbnail, a.ytLockupViewModelContentImage, a.shortsLockupViewModelHostEndpoint';
+
+  // The item under the pointer. YouTube's hover preview is one shared element drawn over the thumbnail, outside the
+  // item, so moving onto it (or onto Anchor's button) keeps the item it opened from.
+  let hoveredItem = null;
   document.addEventListener('pointerover', (event) => {
-    const link = event.composedPath().find((node) =>
-      node instanceof HTMLAnchorElement && /^\/(watch|shorts|playlist)/.test(node.pathname));
-    if (link && !link.closest('ytd-video-preview')) hoveredHref = link.href;
+    const path = event.composedPath();
+    if (path.some((node) => node instanceof Element && node.matches('ytd-video-preview, .anchor-yt-preview-control'))) return;
+    const item = path.find((node) => node instanceof Element && node.matches(ITEM)) || null;
+    if (item === hoveredItem) return;
+    hoveredItem = item;
+    schedule();
   }, { capture: true, passive: true });
 
-  // The playlist the previewed video belongs to, as a plain playlist link, or null. Mixes (RD…) are left out.
-  function previewPlaylistLink(preview, videoUrl) {
-    const videoId = new URL(videoUrl).searchParams.get('v');
-    const raws = [
-      preview.querySelector('.ytp-title-link')?.href,
-      preview.querySelector('.ytdVideoPreviewMediaContainerLink[href]')?.href,
-      // Only trust the hovered link when it is for this same video, so a stale hover can't leak in.
-      videoId && hoveredHref.includes(`v=${videoId}`) ? hoveredHref : null,
-    ];
-    for (const raw of raws) {
-      if (!raw) continue;
-      try {
-        const list = new URL(raw, location.origin).searchParams.get('list');
-        if (list && !list.startsWith('RD')) return `https://www.youtube.com/playlist?list=${list}`;
-      } catch {}
+  // A thumbnail's video and playlist, as plain links. Mixes (RD…) are endless, auto-generated lists: left out.
+  function thumbnailLinks(thumb) {
+    try {
+      const url = new URL(thumb.href, location.origin);
+      const id = url.searchParams.get('v') || url.pathname.match(/^\/shorts\/([^/]+)/)?.[1];
+      // A channel's playlist cards link to /show/VL<playlist id>.
+      const list = url.searchParams.get('list') || url.pathname.match(/^\/show\/VL([\w-]+)/)?.[1];
+      return {
+        video: id ? `https://www.youtube.com/watch?v=${id}` : null,
+        playlist: list && !list.startsWith('RD') ? `https://www.youtube.com/playlist?list=${list}` : null,
+      };
+    } catch {
+      return {};
     }
-    return null;
   }
 
   // "This video" / "Whole playlist" inside the preview's own control. It must live in the preview (not on the page
@@ -140,9 +157,6 @@
     if (event.key === 'Escape') document.querySelectorAll('.anchor-yt-preview-menu').forEach((menu) => menu.remove());
   });
 
-  // The compact control belongs to YouTube's playing hover preview, including Shorts previews.
-  const observedPreviewVideos = new WeakSet();
-
   function fadePreviewBackground(control) {
     control.classList.remove('anchor-yt-preview-background-faded');
     clearTimeout(control._anchorBackgroundTimer);
@@ -161,117 +175,73 @@
   // Reveal the background only when the pointer reaches the Anchor icon.
   document.addEventListener('pointerover', revealPreviewBackground, { capture: true, passive: true });
 
-  function syncPreviews() {
-    const previews = document.querySelectorAll('ytd-video-preview.ytdVideoPreviewActive');
-    const activePlayers = new Set();
-    for (const preview of previews) {
-      const player = preview.querySelector('#inline-preview-player');
-      const media = player?.querySelector('video');
-      const url = previewVideoLink(preview);
-      if (media && !observedPreviewVideos.has(media)) {
-        observedPreviewVideos.add(media);
-        media.addEventListener('play', schedule);
-        media.addEventListener('pause', schedule);
-        media.addEventListener('ended', schedule);
-      }
-      if (!player || !media || !url || !player.isConnected) continue;
-
-      const sourceHref = preview.querySelector('.ytdVideoPreviewMediaContainerLink[href]')?.getAttribute('href') || '';
-      const shortPreview = /^\/shorts\//.test(sourceHref)
-        || (media.videoWidth > 0 && media.videoHeight > media.videoWidth);
-      let control = player.querySelector('.anchor-yt-preview-control');
-      let button = control?.querySelector('.anchor-yt-preview-button');
-      if (!button && media.paused && !shortPreview) continue;
-      const controls = player.querySelector('.ytInlinePlayerControlsTopRightControls');
-      activePlayers.add(player);
-      let createdControl = false;
-      if (!control || !button) {
-        control?.remove();
-        control = document.createElement('div');
-        control.className = 'anchor-yt-preview-control';
-        const icon = document.createElement('div');
-        icon.className = 'anchor-yt-preview-icon';
-        button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'anchor-yt-preview-button';
-        button.innerHTML = PREVIEW_ICON;
-        icon.append(button);
-        control.append(icon);
-        button.addEventListener('click', (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          // Read at click time: the preview can move on to another video.
-          const { url: video, playlist } = button.dataset;
-          if (!playlist) {
-            send(video, button);
-            return;
-          }
-          togglePreviewMenu(control, button, video, playlist);
-        });
-        createdControl = true;
-      }
-      // Keep the control outside YouTube's fixed-height stack, which clips extra children.
-      if (control.parentElement !== player) player.append(control);
-      const playerRect = player.getBoundingClientRect();
-      const controlsRect = controls?.getBoundingClientRect();
-      const visibleNativeRect = (selector) => {
-        for (const root of [player, preview]) {
-          for (const element of root.querySelectorAll(selector)) {
-            const rect = element.getBoundingClientRect();
-            if (rect.width > 0 && rect.height > 0) return rect;
-          }
-        }
-        return null;
-      };
-      const muteRect = visibleNativeRect('.ytmMuteButtonButton');
-      const captionRect = visibleNativeRect('.ytmClosedCaptioningButtonButton');
-      const lastNativeControl = captionRect || muteRect;
-      const playlistQuickPreview = location.pathname === '/playlist'
-        || !!preview.closest('ytd-playlist-panel-video-renderer, ytd-playlist-video-renderer, ytd-playlist-renderer, ytd-grid-playlist-renderer, ytd-compact-playlist-renderer, ytd-rich-item-renderer, ytd-rich-grid-media, ytd-playlist-thumbnail')
-        || /[?&]list=/.test(sourceHref);
-      const top = lastNativeControl
-        ? lastNativeControl.bottom - playerRect.top + 4
-        : playlistQuickPreview
-          ? 16
-          : shortPreview ? 56 : (controlsRect?.height ? controlsRect.bottom - playerRect.top : 112);
-      const right = lastNativeControl
-        ? playerRect.right - lastNativeControl.right + 4
-        : playlistQuickPreview ? 16
-          : controlsRect?.width ? playerRect.right - controlsRect.right : 12;
-      control.style.top = `${Math.max(0, top)}px`;
-      control.style.right = `${Math.max(0, right)}px`;
-      const videoChanged = button.dataset.url && button.dataset.url !== url;
-      if (createdControl || videoChanged) fadePreviewBackground(control);
-      // The playlist this video belongs to, if any. Once found for a video it is kept until the video changes,
-      // since the hover link can be replaced while the preview keeps playing.
-      const foundList = previewPlaylistLink(preview, url);
-      button.dataset.playlist = foundList || (videoChanged ? '' : button.dataset.playlist || '');
-      if (videoChanged) control.querySelector('.anchor-yt-preview-menu')?.remove();
-      button.dataset.url = url;
-      // Keep an accessible name without showing the browser's large native tooltip over the preview.
-      button.title = '';
-      button.setAttribute('aria-label', button.dataset.playlist
-        ? 'Download with Anchor: this video or the whole playlist'
-        : 'Download this video with Anchor');
-      button.setAttribute('aria-haspopup', button.dataset.playlist ? 'menu' : 'false');
-    }
-    document.querySelectorAll('.anchor-yt-preview-control').forEach((control) => {
-      if (activePlayers.has(control.closest('#inline-preview-player'))) {
-        clearTimeout(control._anchorRemovalTimer);
-        control._anchorRemovalTimer = null;
-      } else if (!control._anchorRemovalTimer) {
-        // Let the preview's native controls finish their short fade before removing ours with them.
-        control._anchorRemovalTimer = setTimeout(() => {
-          clearTimeout(control._anchorBackgroundTimer);
-          control.remove();
-        }, 280);
-      }
+  function makeHoverControl() {
+    const control = document.createElement('div');
+    control.className = 'anchor-yt-preview-control';
+    const icon = document.createElement('div');
+    icon.className = 'anchor-yt-preview-icon';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'anchor-yt-preview-button';
+    button.innerHTML = appIcon();
+    icon.append(button);
+    control.append(icon);
+    button.addEventListener('click', (event) => {
+      // Keep the click from reaching the thumbnail link the button sits in.
+      event.preventDefault();
+      event.stopPropagation();
+      // Read at click time: the pointer can move on to another video.
+      const { url, playlist } = button.dataset;
+      if (playlist) togglePreviewMenu(control, button, url, playlist);
+      else send(url, button);
     });
+    return control;
+  }
+
+  // Anchor's button on the hovered video's thumbnail, there as soon as the pointer is over the item. When YouTube's
+  // hover preview opens over the thumbnail, the same button moves into the preview at the same spot, so it stays
+  // visible and hovering it doesn't close the preview.
+  function syncHoverButton() {
+    let control = document.querySelector('.anchor-yt-preview-control');
+    const thumb = hoveredItem?.isConnected ? hoveredItem.querySelector(THUMB) : null;
+    const { video, playlist } = thumb ? thumbnailLinks(thumb) : {};
+    if (!video && !playlist) {
+      control?.remove();
+      return;
+    }
+    // The preview element itself, not its player: the player fades in from transparent for most of a second and
+    // would take the button with it, while the preview element is opaque from the moment it opens.
+    const preview = document.querySelector('ytd-video-preview.ytdVideoPreviewActive');
+    const previewLink = preview && previewVideoLink(preview);
+    const host = preview && video && (!previewLink || previewLink === video) ? preview : thumb;
+    control ??= makeHoverControl();
+    if (control.parentElement !== host) {
+      if (host === thumb && getComputedStyle(thumb).position === 'static') thumb.classList.add('anchor-yt-thumb-host');
+      host.append(control);
+    }
+    // In the preview, which is drawn a little larger than the thumbnail, keep the button on the thumbnail's corner.
+    const thumbRect = thumb.getBoundingClientRect();
+    const hostRect = host.getBoundingClientRect();
+    control.style.top = `${Math.round(thumbRect.top - hostRect.top) + 8}px`;
+    control.style.left = `${Math.round(thumbRect.left - hostRect.left) + 8}px`;
+    const button = control.querySelector('.anchor-yt-preview-button');
+    const url = video || playlist;
+    if (button.dataset.url !== url) {
+      control.querySelector('.anchor-yt-preview-menu')?.remove();
+      fadePreviewBackground(control);
+    }
+    button.dataset.url = url;
+    // A video from a playlist offers both; a playlist's own thumbnail downloads the playlist.
+    button.dataset.playlist = video ? playlist || '' : '';
+    button.setAttribute('aria-label', button.dataset.playlist
+      ? 'Download with Anchor: this video or the whole playlist'
+      : video ? 'Download this video with Anchor' : 'Download this playlist with Anchor');
+    button.setAttribute('aria-haspopup', button.dataset.playlist ? 'menu' : 'false');
   }
 
   // "This video" or "Whole playlist", under the button. It lives on the page body at a fixed position, since
   // YouTube's action row clips anything that sticks out of it.
-  function attachMenu(root, button, label, choices, directWhenSingle = false) {
+  function attachMenu(root, button, choices) {
     document.querySelectorAll('.anchor-yt-menu').forEach((old) => old.remove());
     button.setAttribute('aria-haspopup', 'menu');
     button.setAttribute('aria-expanded', 'false');
@@ -283,40 +253,30 @@
       menu.hidden = true;
       button.setAttribute('aria-expanded', 'false');
     };
-    const currentChoices = () => typeof choices === 'function' ? choices() : choices;
-    const renderChoices = (items) => {
-      menu.replaceChildren();
-      for (const [title, url] of items) {
-        const item = document.createElement('button');
-        item.type = 'button';
-        item.setAttribute('role', 'menuitem');
-        item.textContent = title;
-        item.addEventListener('click', (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          close();
-          send(url, button);
-        });
-        menu.append(item);
-      }
-    };
-    const open = (items) => {
-      renderChoices(items);
+    const open = () => {
       const rect = button.getBoundingClientRect();
       menu.style.left = `${Math.round(rect.left)}px`;
       menu.style.top = `${Math.round(rect.bottom + 6)}px`;
       menu.hidden = false;
       button.setAttribute('aria-expanded', 'true');
     };
+    for (const [title, url] of choices) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.setAttribute('role', 'menuitem');
+      item.textContent = title;
+      item.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        close();
+        send(url, button);
+      });
+      menu.append(item);
+    }
     button.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
-      const items = currentChoices();
-      if (directWhenSingle && items.length === 1) {
-        close();
-        send(items[0][1], button);
-      } else if (menu.hidden) open(items);
-      else close();
+      if (menu.hidden) open(); else close();
     });
     const onDocumentClick = (event) => {
       if (!root.contains(event.target) && !menu.contains(event.target)) close();
@@ -348,7 +308,7 @@
       return [`both ${video} ${list}`, (root) => {
         const button = makeButton('Anchor', 'Download with Anchor', true);
         root.append(button);
-        attachMenu(root, button, 'Anchor', [['This video', video], ['Whole playlist', list]]);
+        attachMenu(root, button, [['This video', video], ['Whole playlist', list]]);
       }];
     }
     if (video) {
@@ -468,7 +428,7 @@
   const LAYOUT_WAIT = 3000;
 
   function sync() {
-    syncPreviews();
+    syncHoverButton();
     const wanted = plan();
     let root = document.getElementById(ROOT_ID);
     if (!wanted) {

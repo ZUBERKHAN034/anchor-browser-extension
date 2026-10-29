@@ -127,15 +127,21 @@ html[dark] .anchor-yt-overlay .anchor-yt-button:hover {
   flex: none;
 }
 
-/* Mirror YouTube's native control while keeping it outside the stack's fixed-height clipping box. */
+/* The hover button in a thumbnail's top-left corner, kept at the same spot when it moves into the hover preview. */
 .anchor-yt-preview-control {
   position: absolute !important;
+  top: 8px;
+  left: 8px;
   z-index: 70;
   width: 40px;
   height: 40px;
   margin: 0;
   opacity: 1 !important;
   pointer-events: auto !important;
+}
+
+.anchor-yt-thumb-host {
+  position: relative;
 }
 
 .anchor-yt-preview-control::before {
@@ -179,21 +185,6 @@ html[dark] .anchor-yt-overlay .anchor-yt-button:hover {
   color: #fff;
   background: transparent;
   pointer-events: auto !important;
-}
-
-.anchor-yt-preview-mark {
-  width: 24px;
-  height: 24px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.85));
-}
-
-.anchor-yt-sending .anchor-yt-preview-mark {
-  opacity: 0.35;
 }
 
 .anchor-yt-floating .anchor-yt-button {
@@ -347,7 +338,7 @@ html[dark] .anchor-yt-menu button:hover {
 .anchor-yt-preview-menu {
   position: absolute;
   top: 100%;
-  right: 0;
+  left: 0;
   margin-top: 6px;
   min-width: 140px;
   padding: 4px;
