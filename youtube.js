@@ -307,7 +307,9 @@
     const playerRect = player?.getBoundingClientRect();
     if (!playerRect) return;
 
-    const likeControl = actions?.querySelector(
+    // Fullscreen has its own quick-action bar, separate from the hidden metadata action row.
+    const fullscreenLikeButton = player.querySelector('yt-player-quick-action-buttons button');
+    const likeControl = fullscreenLikeButton || actions?.querySelector(
       'segmented-like-dislike-button-view-model, like-button-view-model, ytd-segmented-like-dislike-button-renderer',
     ) || actions?.firstElementChild;
     const actionRect = likeControl?.getBoundingClientRect() || actions?.getBoundingClientRect();
