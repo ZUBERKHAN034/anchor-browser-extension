@@ -20,6 +20,7 @@
   cursor: pointer;
   color: #fff;
   background: transparent;
+  transition: background-color 140ms ease, transform 140ms ease;
 }
 
 .anchor-ig-button:hover {
@@ -54,7 +55,18 @@
 }
 
 .anchor-ig-button[aria-busy="true"] .anchor-ig-icon {
-  opacity: 0.28 !important;
+  opacity: 0.22 !important;
+}
+
+.anchor-ig-button[aria-busy="true"] {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+  cursor: progress !important;
+  opacity: 1 !important;
+  transform: scale(1.06);
+}
+
+.anchor-ig-button:disabled {
+  opacity: 1 !important;
 }
 
 .anchor-ig-button[aria-busy="true"] .anchor-ig-spinner {

@@ -25,8 +25,8 @@
   }
 
   function restoreLoading(button) {
-    const label = pendingDownloads.get(button.dataset.loadingKey);
-    if (label) applyLoading(button, label);
+    const pending = pendingDownloads.get(button.dataset.loadingKey);
+    if (pending) applyLoading(button, pending.label);
   }
 
   function reelLink() {
@@ -38,7 +38,8 @@
   function beginSending(button, label = 'Sending to Anchor', key = button.dataset.loadingKey) {
     key = key || loadingKey(button.dataset.url || location.href);
     button.dataset.loadingKey = key;
-    pendingDownloads.set(key, label);
+    const previous = pendingDownloads.get(key);
+    pendingDownloads.set(key, { label, startedAt: previous?.startedAt ?? Date.now() });
     const matchingButtons = [...document.querySelectorAll('.anchor-ig-button')]
       .filter((candidate) => candidate.dataset.loadingKey === key);
     if (!matchingButtons.includes(button)) matchingButtons.push(button);
@@ -47,25 +48,31 @@
 
   function finishSending(button, ok, failureLabel = 'Anchor isn’t running') {
     const key = button.dataset.loadingKey;
-    if (key) pendingDownloads.delete(key);
-    const matchingButtons = key
-      ? [...document.querySelectorAll('.anchor-ig-button')].filter((candidate) => candidate.dataset.loadingKey === key)
-      : [];
-    if (!matchingButtons.includes(button)) matchingButtons.push(button);
-    matchingButtons.forEach((candidate) => {
-      candidate.classList.remove('anchor-ig-sending');
-      candidate.disabled = false;
-      candidate.removeAttribute('aria-busy');
-      candidate.setAttribute('aria-label', ok ? 'Sent to Anchor' : failureLabel);
-      candidate.classList.toggle('anchor-ig-failed', !ok);
-    });
+    const pending = key && pendingDownloads.get(key);
+    const minimumLoadingMs = 900;
+    const wait = pending ? Math.max(0, minimumLoadingMs - (Date.now() - pending.startedAt)) : 0;
     setTimeout(() => {
+      if (key && pendingDownloads.get(key) !== pending) return;
+      if (key) pendingDownloads.delete(key);
+      const matchingButtons = key
+        ? [...document.querySelectorAll('.anchor-ig-button')].filter((candidate) => candidate.dataset.loadingKey === key)
+        : [];
+      if (!matchingButtons.includes(button)) matchingButtons.push(button);
       matchingButtons.forEach((candidate) => {
-        if (candidate.getAttribute('aria-busy') === 'true') return;
-        candidate.setAttribute('aria-label', candidate.title);
-        candidate.classList.remove('anchor-ig-failed');
+        candidate.classList.remove('anchor-ig-sending');
+        candidate.disabled = false;
+        candidate.removeAttribute('aria-busy');
+        candidate.setAttribute('aria-label', ok ? 'Sent to Anchor' : failureLabel);
+        candidate.classList.toggle('anchor-ig-failed', !ok);
       });
-    }, 2500);
+      setTimeout(() => {
+        matchingButtons.forEach((candidate) => {
+          if (candidate.getAttribute('aria-busy') === 'true') return;
+          candidate.setAttribute('aria-label', candidate.title);
+          candidate.classList.remove('anchor-ig-failed');
+        });
+      }, 2500);
+    }, wait);
   }
 
   function send(url, button, filename) {
