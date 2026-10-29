@@ -1,5 +1,6 @@
 // Adds an Anchor button to YouTube. On a watch page it downloads the video; when the video plays from a playlist it
-// asks whether to take the video or the whole playlist. On a playlist page it downloads the playlist. Anchor then
+// asks whether to take the video or the whole playlist. On a playlist page it downloads the playlist. In YouTube's
+// hover preview (quick view) it does the same: a playlist item offers "This video" or "Whole playlist". Anchor then
 // opens its New Download window to pick a quality (or, for a playlist, the videos).
 (() => {
   const ROOT_ID = 'anchor-yt';
@@ -72,6 +73,73 @@
     return null;
   }
 
+  // The link of the thumbnail the pointer last entered. YouTube has one shared preview element, so the item that
+  // opened it isn't an ancestor of it; this is how we know which item (and which playlist) it came from.
+  // Links inside the preview itself are skipped, so they can't overwrite a thumbnail link that carries the list.
+  let hoveredHref = '';
+  document.addEventListener('pointerover', (event) => {
+    const link = event.composedPath().find((node) =>
+      node instanceof HTMLAnchorElement && /^\/(watch|shorts|playlist)/.test(node.pathname));
+    if (link && !link.closest('ytd-video-preview')) hoveredHref = link.href;
+  }, { capture: true, passive: true });
+
+  // The playlist the previewed video belongs to, as a plain playlist link, or null. Mixes (RD…) are left out.
+  function previewPlaylistLink(preview, videoUrl) {
+    const videoId = new URL(videoUrl).searchParams.get('v');
+    const raws = [
+      preview.querySelector('.ytp-title-link')?.href,
+      preview.querySelector('.ytdVideoPreviewMediaContainerLink[href]')?.href,
+      // Only trust the hovered link when it is for this same video, so a stale hover can't leak in.
+      videoId && hoveredHref.includes(`v=${videoId}`) ? hoveredHref : null,
+    ];
+    for (const raw of raws) {
+      if (!raw) continue;
+      try {
+        const list = new URL(raw, location.origin).searchParams.get('list');
+        if (list && !list.startsWith('RD')) return `https://www.youtube.com/playlist?list=${list}`;
+      } catch {}
+    }
+    return null;
+  }
+
+  // "This video" / "Whole playlist" inside the preview's own control. It must live in the preview (not on the page
+  // body): leaving the preview would close it, and with it the menu. It has its own class, so the page-level
+  // menu cleanup doesn't touch it.
+  function togglePreviewMenu(control, button, video, list) {
+    const existing = control.querySelector('.anchor-yt-preview-menu');
+    if (existing) {
+      existing.remove();
+      return;
+    }
+    const menu = document.createElement('div');
+    menu.className = 'anchor-yt-preview-menu';
+    menu.setAttribute('role', 'menu');
+    for (const [title, url] of [['This video', video], ['Whole playlist', list]]) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.setAttribute('role', 'menuitem');
+      item.textContent = title;
+      item.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        menu.remove();
+        send(url, button);
+      });
+      menu.append(item);
+    }
+    control.append(menu);
+  }
+
+  // Click anywhere else, or press Escape: close an open preview menu.
+  document.addEventListener('click', (event) => {
+    document.querySelectorAll('.anchor-yt-preview-menu').forEach((menu) => {
+      if (!menu.parentElement?.contains(event.target)) menu.remove();
+    });
+  }, true);
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') document.querySelectorAll('.anchor-yt-preview-menu').forEach((menu) => menu.remove());
+  });
+
   // The compact control belongs to YouTube's playing hover preview, including Shorts previews.
   const observedPreviewVideos = new WeakSet();
 
@@ -132,7 +200,13 @@
         button.addEventListener('click', (event) => {
           event.preventDefault();
           event.stopPropagation();
-          send(button.dataset.url, button);
+          // Read at click time: the preview can move on to another video.
+          const { url: video, playlist } = button.dataset;
+          if (!playlist) {
+            send(video, button);
+            return;
+          }
+          togglePreviewMenu(control, button, video, playlist);
         });
         createdControl = true;
       }
@@ -168,10 +242,18 @@
       control.style.right = `${Math.max(0, right)}px`;
       const videoChanged = button.dataset.url && button.dataset.url !== url;
       if (createdControl || videoChanged) fadePreviewBackground(control);
+      // The playlist this video belongs to, if any. Once found for a video it is kept until the video changes,
+      // since the hover link can be replaced while the preview keeps playing.
+      const foundList = previewPlaylistLink(preview, url);
+      button.dataset.playlist = foundList || (videoChanged ? '' : button.dataset.playlist || '');
+      if (videoChanged) control.querySelector('.anchor-yt-preview-menu')?.remove();
       button.dataset.url = url;
       // Keep an accessible name without showing the browser's large native tooltip over the preview.
       button.title = '';
-      button.setAttribute('aria-label', 'Download this video with Anchor');
+      button.setAttribute('aria-label', button.dataset.playlist
+        ? 'Download with Anchor: this video or the whole playlist'
+        : 'Download this video with Anchor');
+      button.setAttribute('aria-haspopup', button.dataset.playlist ? 'menu' : 'false');
     }
     document.querySelectorAll('.anchor-yt-preview-control').forEach((control) => {
       if (activePlayers.has(control.closest('#inline-preview-player'))) {
