@@ -307,7 +307,10 @@
     const playerRect = player?.getBoundingClientRect();
     if (!playerRect) return;
 
-    const actionRect = actions?.getBoundingClientRect();
+    const likeControl = actions?.querySelector(
+      'segmented-like-dislike-button-view-model, like-button-view-model, ytd-segmented-like-dislike-button-renderer',
+    ) || actions?.firstElementChild;
+    const actionRect = likeControl?.getBoundingClientRect() || actions?.getBoundingClientRect();
     const actionVisible = actionRect?.width > 0 && actionRect?.height > 0
       && actionRect.bottom > 0 && actionRect.top < window.innerHeight
       && actionRect.right > 0 && actionRect.left < window.innerWidth
