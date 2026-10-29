@@ -57,25 +57,32 @@
   }
 
   function previewVideoLink(preview) {
-    const raw = preview.querySelector('.ytp-title-link')?.href
-      || preview.querySelector('.ytdVideoPreviewMediaContainerLink[href]')?.href;
-    if (!raw) return null;
-    try {
-      const url = new URL(raw, location.origin);
-      const id = url.searchParams.get('v') || url.pathname.match(/^\/shorts\/([^/]+)/)?.[1];
-      return id ? `https://www.youtube.com/watch?v=${id}` : null;
-    } catch {
-      return null;
+    const links = [
+      preview.querySelector('.ytp-title-link')?.href,
+      preview.querySelector('.ytdVideoPreviewMediaContainerLink[href]')?.href,
+    ];
+    for (const raw of links) {
+      if (!raw) continue;
+      try {
+        const url = new URL(raw, location.origin);
+        const id = url.searchParams.get('v') || url.pathname.match(/^\/shorts\/([^/]+)/)?.[1];
+        if (id) return `https://www.youtube.com/watch?v=${id}`;
+      } catch {}
     }
+    return null;
+  }
+
+  function playlistUrlFromId(list) {
+    return list && !list.startsWith('RD')
+      ? `https://www.youtube.com/playlist?list=${encodeURIComponent(list)}`
+      : null;
   }
 
   function playlistUrlFrom(raw) {
     if (!raw) return null;
     try {
       const list = new URL(raw, location.origin).searchParams.get('list');
-      return list && !list.startsWith('RD')
-        ? `https://www.youtube.com/playlist?list=${encodeURIComponent(list)}`
-        : null;
+      return playlistUrlFromId(list);
     } catch {
       return null;
     }
@@ -99,9 +106,43 @@
       'ytd-grid-playlist-renderer',
       'ytd-compact-playlist-renderer',
       'ytd-rich-item-renderer',
+      'ytd-rich-grid-media',
+      'ytd-playlist-thumbnail',
     ].join(', '));
+    const rendererPlaylistId = (node) => {
+      const data = node.data || node.__data?.data || node.__data;
+      return node.playlistId
+        || data?.playlistId
+        || data?.playlistRenderer?.playlistId
+        || data?.navigationEndpoint?.watchEndpoint?.playlistId
+        || data?.content?.playlistRenderer?.playlistId;
+    };
     if (playlistCard) {
+      const cardNodes = [playlistCard, ...playlistCard.querySelectorAll('*')];
+      for (const node of cardNodes) {
+        const list = playlistUrlFromId(rendererPlaylistId(node))
+          || ['playlist-id', 'data-playlist-id', 'data-list-id', 'list']
+            .map((attribute) => playlistUrlFromId(node.getAttribute(attribute)))
+            .find(Boolean);
+        if (list) return list;
+      }
       for (const link of playlistCard.querySelectorAll('a[href]')) {
+        const list = playlistUrlFrom(link.href);
+        if (list) return list;
+      }
+    }
+
+    // Some channel playlist quick views render their player in a nested preview element without
+    // carrying the list parameter on the video link. Walk only nearby card wrappers for its playlist link.
+    for (let node = preview.parentElement, depth = 0; node && depth < 8; node = node.parentElement, depth += 1) {
+      if (node.matches('ytd-rich-grid-renderer, ytd-browse, ytd-page-manager, ytd-app')) break;
+      const list = playlistUrlFromId(rendererPlaylistId(node));
+      if (list) return list;
+      for (const attribute of ['playlist-id', 'data-playlist-id', 'data-list-id', 'list']) {
+        const list = playlistUrlFromId(node.getAttribute(attribute));
+        if (list) return list;
+      }
+      for (const link of node.querySelectorAll('a[href]')) {
         const list = playlistUrlFrom(link.href);
         if (list) return list;
       }
@@ -171,8 +212,8 @@
           const videoUrl = button.dataset.url;
           const listUrl = button.dataset.playlistUrl;
           return listUrl
-            ? [['This video', videoUrl], ['Whole playlist', listUrl]]
-            : [['This video', videoUrl]];
+            ? [['This Video', videoUrl], ['Whole playlist', listUrl]]
+            : [['This Video', videoUrl]];
         }, true);
         createdControl = true;
       }
@@ -194,7 +235,7 @@
       const lastNativeControl = captionRect || muteRect;
       const playlistQuickPreview = location.pathname === '/playlist'
         || !!playlistUrl
-        || !!preview.closest('ytd-playlist-panel-video-renderer, ytd-playlist-video-renderer, ytd-playlist-renderer, ytd-grid-playlist-renderer, ytd-compact-playlist-renderer, ytd-rich-item-renderer')
+        || !!preview.closest('ytd-playlist-panel-video-renderer, ytd-playlist-video-renderer, ytd-playlist-renderer, ytd-grid-playlist-renderer, ytd-compact-playlist-renderer, ytd-rich-item-renderer, ytd-rich-grid-media, ytd-playlist-thumbnail')
         || /[?&]list=/.test(sourceHref);
       const top = lastNativeControl
         ? lastNativeControl.bottom - playerRect.top + 4
