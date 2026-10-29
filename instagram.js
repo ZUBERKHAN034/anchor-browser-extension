@@ -317,7 +317,21 @@
         if (parent.children.length >= 3 && parent.querySelectorAll(OTHER_ACTION_ICONS).length >= 2) {
           let likeGroup = likeIcon;
           while (likeGroup.parentElement && likeGroup.parentElement !== parent) likeGroup = likeGroup.parentElement;
-          if (likeGroup.parentElement === parent) return { rail: parent, likeGroup };
+          if (likeGroup.parentElement === parent) {
+            const saveIcon = [...parent.querySelectorAll('svg[aria-label="Save"]')].find(visible);
+            let saveGroup = saveIcon;
+            while (saveGroup?.parentElement && saveGroup.parentElement !== parent) saveGroup = saveGroup.parentElement;
+            if (saveGroup?.parentElement === parent) {
+              const likeRect = likeGroup.getBoundingClientRect();
+              const saveRect = saveGroup.getBoundingClientRect();
+              const sameRow = Math.abs((likeRect.top + likeRect.bottom) / 2 - (saveRect.top + saveRect.bottom) / 2)
+                < Math.abs((likeRect.left + likeRect.right) / 2 - (saveRect.left + saveRect.right) / 2);
+              const flexDirection = getComputedStyle(parent).flexDirection;
+              const horizontalPostActions = flexDirection.startsWith('row') || sameRow;
+              return { rail: parent, anchorBefore: horizontalPostActions ? saveGroup : likeGroup };
+            }
+            return { rail: parent, anchorBefore: likeGroup };
+          }
         }
         node = parent;
       }
@@ -335,7 +349,7 @@
       return;
     }
     if (root?.dataset.url === url && root.parentElement === target.rail
-        && root.nextElementSibling === target.likeGroup) return;
+        && root.nextElementSibling === target.anchorBefore) return;
     root?.remove();
     root = document.createElement('div');
     root.id = ROOT_ID;
@@ -355,7 +369,7 @@
     });
     root.append(button);
     restoreLoading(button);
-    target.rail.insertBefore(root, target.likeGroup);
+    target.rail.insertBefore(root, target.anchorBefore);
   }
 
   let queued = false;
