@@ -55,7 +55,9 @@ async function sendToAnchor(url, filename, referrer) {
   let cookieJar = [];
   // Anchor selects its own configured browser cookies for Instagram. Sending a partial extension jar can
   // change yt-dlp's result compared with adding the same Reel inside Anchor, so leave it to Anchor there.
-  const instagram = /^https?:\/\/(?:www\.)?instagram\.com\//i.test(url);
+  // Signed Instagram CDN URLs are self-contained and should not receive an unrelated browser cookie jar.
+  const instagram = /^https?:\/\/(?:www\.)?instagram\.com\//i.test(url)
+    || /^https:\/\/[^/]+\.(?:fbcdn\.net|cdninstagram\.com)\//i.test(url);
   if (!instagram) {
     try {
       const all = await chrome.cookies.getAll({ url });
@@ -173,11 +175,11 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 // Sends a link the user picked (context menu, YouTube buttons), starting Anchor first if it isn't running.
-async function downloadWithAnchor(url, referrer) {
-  if (await sendToAnchor(url, undefined, referrer)) return true;
+async function downloadWithAnchor(url, referrer, filename) {
+  if (await sendToAnchor(url, filename, referrer)) return true;
   if (!(await launchAnchor())) return false;
   await setMode('ready');
-  return sendToAnchor(url, undefined, referrer);
+  return sendToAnchor(url, filename, referrer);
 }
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -190,7 +192,22 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
 // The Download buttons added to supported video pages.
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type !== 'anchor-download' || !/^https:\/\/(?:www\.youtube\.com|www\.instagram\.com)\//.test(message.url ?? '')) return;
-  downloadWithAnchor(message.url, message.referrer ?? sender.tab?.url).then((ok) => sendResponse({ ok }));
+  if (message?.type !== 'anchor-download') return;
+  let url;
+  let senderHost;
+  try {
+    url = new URL(message.url);
+    senderHost = new URL(sender.tab?.url ?? message.referrer).hostname;
+  } catch {
+    return;
+  }
+  const siteUrl = url.protocol === 'https:'
+    && (url.hostname === 'www.youtube.com' || url.hostname === 'www.instagram.com');
+  const cdnUrl = url.protocol === 'https:' && /\.(?:fbcdn\.net|cdninstagram\.com)$/i.test(url.hostname)
+    && /\.mp4$/i.test(url.pathname) && senderHost === 'www.instagram.com';
+  if (!siteUrl && !cdnUrl) return;
+  const filename = typeof message.filename === 'string' && !/[\\/\0]/.test(message.filename)
+    ? message.filename.slice(0, 200) : undefined;
+  downloadWithAnchor(url.href, message.referrer ?? sender.tab?.url, filename).then((ok) => sendResponse({ ok }));
   return true; // answers asynchronously
 });

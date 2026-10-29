@@ -5,6 +5,7 @@
   const LIKE_ICONS = 'svg[aria-label="Like"], svg[aria-label="Unlike"]';
   const OTHER_ACTION_ICONS = ["Comment", "Share", "Save", "More"]
     .map((name) => `svg[aria-label="${name}"]`).join(', ');
+  const CAROUSEL_RESOLVER = 'anchor-instagram-carousel-resolver-v1';
 
   function reelLink() {
     const match = location.pathname.match(/^\/(?:reel|reels)\/([^/]+)/);
@@ -12,21 +13,66 @@
     return match ? `https://www.instagram.com/reel/${match[1]}/` : null;
   }
 
-  function send(url, button) {
+  function beginSending(button, label = 'Sending to Anchor') {
     button.classList.add('anchor-ig-sending');
     button.setAttribute('aria-busy', 'true');
-    button.setAttribute('aria-label', 'Sending to Anchor');
-    chrome.runtime.sendMessage({ type: 'anchor-download', url, referrer: location.href }, (reply) => {
+    button.setAttribute('aria-label', label);
+  }
+
+  function finishSending(button, ok, failureLabel = 'Anchor isn’t running') {
+    button.classList.remove('anchor-ig-sending');
+    button.removeAttribute('aria-busy');
+    button.setAttribute('aria-label', ok ? 'Sent to Anchor' : failureLabel);
+    button.classList.toggle('anchor-ig-failed', !ok);
+    setTimeout(() => {
+      button.setAttribute('aria-label', button.title);
+      button.classList.remove('anchor-ig-failed');
+    }, 2500);
+  }
+
+  function send(url, button, filename) {
+    beginSending(button);
+    chrome.runtime.sendMessage({ type: 'anchor-download', url, filename, referrer: location.href }, (reply) => {
       const ok = !chrome.runtime.lastError && reply?.ok;
-      button.classList.remove('anchor-ig-sending');
-      button.removeAttribute('aria-busy');
-      button.setAttribute('aria-label', ok ? 'Sent to Anchor' : 'Anchor isn’t running');
-      button.classList.toggle('anchor-ig-failed', !ok);
-      setTimeout(() => {
-        button.setAttribute('aria-label', button.title);
-        button.classList.remove('anchor-ig-failed');
-      }, 2500);
+      finishSending(button, ok);
     });
+  }
+
+  function resolveCarouselVideo(shortcode, index) {
+    const requestId = crypto.randomUUID();
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        window.removeEventListener('message', onMessage);
+        reject(new Error('Instagram did not return the selected video'));
+      }, 10000);
+      function onMessage(event) {
+        const response = event.data;
+        if (event.source !== window || event.origin !== location.origin
+            || response?.channel !== CAROUSEL_RESOLVER || response.kind !== 'result'
+            || response.requestId !== requestId) return;
+        clearTimeout(timeout);
+        window.removeEventListener('message', onMessage);
+        if (response.error) reject(new Error(response.error));
+        else resolve(response.url);
+      }
+      window.addEventListener('message', onMessage);
+      window.postMessage({ channel: CAROUSEL_RESOLVER, kind: 'resolve', requestId, shortcode, index }, location.origin);
+    });
+  }
+
+  async function sendCarouselVideo(shortcode, index, button) {
+    beginSending(button, 'Finding this carousel video');
+    try {
+      const url = await resolveCarouselVideo(shortcode, index);
+      const filename = `Instagram-${shortcode}-slide-${index}.mp4`;
+      button.setAttribute('aria-label', 'Sending to Anchor');
+      chrome.runtime.sendMessage({ type: 'anchor-download', url, filename, referrer: location.href }, (reply) => {
+        const ok = !chrome.runtime.lastError && reply?.ok;
+        finishSending(button, ok, 'Couldn’t find this video');
+      });
+    } catch {
+      finishSending(button, false, 'Couldn’t find this video');
+    }
   }
 
   function visible(el) {
@@ -123,8 +169,10 @@
           || !!article.querySelector('button[aria-label="Next"], button[aria-label="Go back"]')
           || links.some(({ type, imgIndex }) => type === 'p' && imgIndex);
         if (!activeTimelineVideo(article, hasCarousel)) continue;
-        const url = timelineVideoLink(links, hasCarousel, carouselIndex(article, links));
+        const index = carouselIndex(article, links);
+        const url = timelineVideoLink(links, hasCarousel, index);
         if (!url) continue;
+        const post = hasCarousel ? links.find(({ type }) => type === 'p') : null;
 
         const saveIcon = [...article.querySelectorAll('svg[aria-label="Save"]')].find(rendered);
         const row = saveIcon?.closest('section');
@@ -140,6 +188,10 @@
           control = document.createElement('div');
           control.className = 'anchor-ig-feed-control';
           control.dataset.url = url;
+          if (post) {
+            control.dataset.shortcode = post.shortcode;
+            control.dataset.slideIndex = String(index);
+          }
           button = document.createElement('button');
           button.type = 'button';
           button.className = 'anchor-ig-button anchor-ig-feed-button';
@@ -149,7 +201,11 @@
           button.addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();
-            send(control.dataset.url, button);
+            if (control.dataset.shortcode && control.dataset.slideIndex) {
+              sendCarouselVideo(control.dataset.shortcode, Number(control.dataset.slideIndex), button);
+            } else {
+              send(control.dataset.url, button);
+            }
           });
           control.append(button);
         }
