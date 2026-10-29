@@ -103,21 +103,24 @@
       }
       if (!player || !media || !url || !player.isConnected) continue;
 
+      const sourceHref = preview.querySelector('.ytdVideoPreviewMediaContainerLink[href]')?.getAttribute('href') || '';
+      const shortPreview = /^\/shorts\//.test(sourceHref)
+        || (media.videoWidth > 0 && media.videoHeight > media.videoWidth);
       let control = player.querySelector('.anchor-yt-preview-control');
       let button = control?.querySelector('.anchor-yt-preview-button');
-      if (!button && media.paused) continue;
+      if (!button && media.paused && !shortPreview) continue;
       const controls = player.querySelector('.ytInlinePlayerControlsTopRightControls');
       activePlayers.add(player);
       let createdControl = false;
       if (!control || !button) {
         control?.remove();
         control = document.createElement('div');
-        control.className = 'ytInlinePlayerControlsTopRightControlsCircleButton anchor-yt-preview-control';
+        control.className = 'anchor-yt-preview-control';
         const icon = document.createElement('div');
-        icon.className = 'ytInlinePlayerControlsButtonIcon';
+        icon.className = 'anchor-yt-preview-icon';
         button = document.createElement('button');
         button.type = 'button';
-        button.className = 'ytmClosedCaptioningButtonButton anchor-yt-preview-button';
+        button.className = 'anchor-yt-preview-button';
         button.innerHTML = PREVIEW_ICON;
         button.addEventListener('click', (event) => {
           event.preventDefault();
@@ -132,11 +135,10 @@
       if (control.parentElement !== player) player.append(control);
       const playerRect = player.getBoundingClientRect();
       const controlsRect = controls?.getBoundingClientRect();
-      const sourceHref = preview.querySelector('.ytdVideoPreviewMediaContainerLink[href]')?.getAttribute('href') || '';
-      const shortPreview = /^\/shorts\//.test(sourceHref)
-        || (media.videoWidth > 0 && media.videoHeight > media.videoWidth);
-      const muteButton = player.querySelector('.ytmMuteButtonButton');
-      const captionButton = player.querySelector('.ytmClosedCaptioningButtonButton');
+      const muteButton = player.querySelector('.ytmMuteButtonButton')
+        || preview.querySelector('.ytmMuteButtonButton');
+      const captionButton = player.querySelector('.ytmClosedCaptioningButtonButton')
+        || preview.querySelector('.ytmClosedCaptioningButtonButton');
       const muteRect = muteButton?.getBoundingClientRect();
       const captionRect = captionButton?.getBoundingClientRect();
       const muteVisible = muteRect?.width > 0 && muteRect?.height > 0;
@@ -149,7 +151,6 @@
         : muteVisible ? playerRect.right - muteRect.right : 12;
       control.style.top = `${Math.max(0, top)}px`;
       control.style.right = `${Math.max(0, right)}px`;
-      control.style.opacity = controls ? getComputedStyle(controls).opacity : '1';
       if (createdControl) fadePreviewBackground(control);
       button.dataset.url = url;
       // Keep an accessible name without showing the browser's large native tooltip over the preview.
