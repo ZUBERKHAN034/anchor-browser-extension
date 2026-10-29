@@ -6,6 +6,28 @@
   const OTHER_ACTION_ICONS = ["Comment", "Share", "Save", "More"]
     .map((name) => `svg[aria-label="${name}"]`).join(', ');
   const CAROUSEL_RESOLVER = 'anchor-instagram-carousel-resolver-v1';
+  const pendingDownloads = new Map();
+
+  function loadingKey(url) {
+    try {
+      const match = new URL(url).pathname.match(/^\/(?:reel|reels|p)\/([^/]+)/);
+      return match ? `instagram:${match[1]}` : url;
+    } catch {
+      return url;
+    }
+  }
+
+  function applyLoading(button, label) {
+    button.classList.add('anchor-ig-sending');
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    button.setAttribute('aria-label', label);
+  }
+
+  function restoreLoading(button) {
+    const label = pendingDownloads.get(button.dataset.loadingKey);
+    if (label) applyLoading(button, label);
+  }
 
   function reelLink() {
     const match = location.pathname.match(/^\/(?:reel|reels)\/([^/]+)/);
@@ -13,20 +35,36 @@
     return match ? `https://www.instagram.com/reel/${match[1]}/` : null;
   }
 
-  function beginSending(button, label = 'Sending to Anchor') {
-    button.classList.add('anchor-ig-sending');
-    button.setAttribute('aria-busy', 'true');
-    button.setAttribute('aria-label', label);
+  function beginSending(button, label = 'Sending to Anchor', key = button.dataset.loadingKey) {
+    key = key || loadingKey(button.dataset.url || location.href);
+    button.dataset.loadingKey = key;
+    pendingDownloads.set(key, label);
+    const matchingButtons = [...document.querySelectorAll('.anchor-ig-button')]
+      .filter((candidate) => candidate.dataset.loadingKey === key);
+    if (!matchingButtons.includes(button)) matchingButtons.push(button);
+    matchingButtons.forEach((candidate) => applyLoading(candidate, label));
   }
 
   function finishSending(button, ok, failureLabel = 'Anchor isn’t running') {
-    button.classList.remove('anchor-ig-sending');
-    button.removeAttribute('aria-busy');
-    button.setAttribute('aria-label', ok ? 'Sent to Anchor' : failureLabel);
-    button.classList.toggle('anchor-ig-failed', !ok);
+    const key = button.dataset.loadingKey;
+    if (key) pendingDownloads.delete(key);
+    const matchingButtons = key
+      ? [...document.querySelectorAll('.anchor-ig-button')].filter((candidate) => candidate.dataset.loadingKey === key)
+      : [];
+    if (!matchingButtons.includes(button)) matchingButtons.push(button);
+    matchingButtons.forEach((candidate) => {
+      candidate.classList.remove('anchor-ig-sending');
+      candidate.disabled = false;
+      candidate.removeAttribute('aria-busy');
+      candidate.setAttribute('aria-label', ok ? 'Sent to Anchor' : failureLabel);
+      candidate.classList.toggle('anchor-ig-failed', !ok);
+    });
     setTimeout(() => {
-      button.setAttribute('aria-label', button.title);
-      button.classList.remove('anchor-ig-failed');
+      matchingButtons.forEach((candidate) => {
+        if (candidate.getAttribute('aria-busy') === 'true') return;
+        candidate.setAttribute('aria-label', candidate.title);
+        candidate.classList.remove('anchor-ig-failed');
+      });
     }, 2500);
   }
 
@@ -61,10 +99,10 @@
   }
 
   async function sendCarouselVideo(shortcode, index, button) {
-    beginSending(button, 'Finding this carousel video');
+    beginSending(button, 'Finding this carousel video', `instagram:${shortcode}`);
     try {
       const url = await resolveCarouselVideo(shortcode, index);
-      button.setAttribute('aria-label', 'Sending to Anchor');
+      beginSending(button, 'Sending to Anchor', `instagram:${shortcode}`);
       // Let Anchor derive the name and category from the CDN's .mp4 response. A suggestedName bypasses
       // Anchor's automatic category detection and leaves direct CDN files marked as Other.
       chrome.runtime.sendMessage({ type: 'anchor-download', url, referrer: location.href }, (reply) => {
@@ -227,6 +265,7 @@
           button = document.createElement('button');
           button.type = 'button';
           button.className = 'anchor-ig-button anchor-ig-feed-button';
+          button.dataset.loadingKey = loadingKey(url);
           button.title = 'Download this video with Anchor';
           button.setAttribute('aria-label', button.title);
           button.innerHTML = ICON;
@@ -240,6 +279,7 @@
             }
           });
           control.append(button);
+          restoreLoading(button);
         }
 
         saveSlot.classList.add('anchor-ig-save-slot');
@@ -297,6 +337,8 @@
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'anchor-ig-button';
+    button.dataset.loadingKey = loadingKey(url);
+    button.dataset.url = url;
     button.title = 'Download this Reel with Anchor';
     button.setAttribute('aria-label', 'Download this Reel with Anchor');
     button.innerHTML = ICON;
@@ -306,6 +348,7 @@
       send(url, button);
     });
     root.append(button);
+    restoreLoading(button);
     target.rail.insertBefore(root, target.likeGroup);
   }
 
