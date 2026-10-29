@@ -144,13 +144,8 @@ html[dark] .anchor-yt-overlay .anchor-yt-button:hover {
   border-radius: 50%;
   background: rgba(33, 33, 33, 0.78);
   content: "";
-  opacity: 1;
+  opacity: var(--anchor-preview-background-opacity, 1);
   pointer-events: none;
-  transition: opacity 0.25s cubic-bezier(0, 0, 0.2, 1);
-}
-
-.anchor-yt-preview-control.anchor-yt-preview-background-faded::before {
-  opacity: 0;
 }
 
 .anchor-yt-preview-icon {

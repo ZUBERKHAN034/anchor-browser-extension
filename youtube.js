@@ -73,12 +73,48 @@
   const observedPreviewVideos = new WeakSet();
   const observedPreviews = new WeakSet();
 
-  function fadePreviewBackground(control) {
-    control.classList.remove('anchor-yt-preview-background-faded');
-    clearTimeout(control._anchorBackgroundTimer);
-    control._anchorBackgroundTimer = setTimeout(() => {
-      control.classList.add('anchor-yt-preview-background-faded');
-    }, 2200);
+  function previewControlsOpacity(player) {
+    const nativeControl = ['.ytmClosedCaptioningButtonButton', '.ytmMuteButtonButton']
+      .flatMap((selector) => [...player.querySelectorAll(selector)])
+      .find((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+    if (!nativeControl) return 1;
+    let opacity = 1;
+    for (let element = nativeControl; element; element = element.parentElement) {
+      const style = getComputedStyle(element);
+      if (style.display === 'none' || style.visibility === 'hidden') return 0;
+      opacity *= Number(style.opacity);
+      if (element === player) break;
+    }
+    return opacity;
+  }
+
+  function syncPreviewBackground(control, player) {
+    const update = () => {
+      control.style.setProperty('--anchor-preview-background-opacity', `${previewControlsOpacity(player)}`);
+    };
+    update();
+    control._anchorOpacityUntil = performance.now() + 350;
+    if (control._anchorOpacityFrame) return;
+    let previousOpacity = -1;
+    const followTransition = () => {
+      if (!control.isConnected || !player.isConnected) {
+        control._anchorOpacityFrame = 0;
+        return;
+      }
+      update();
+      const opacity = Number(control.style.getPropertyValue('--anchor-preview-background-opacity'));
+      const changed = Math.abs(opacity - previousOpacity) > 0.01;
+      previousOpacity = opacity;
+      if (performance.now() < control._anchorOpacityUntil || changed) {
+        control._anchorOpacityFrame = requestAnimationFrame(followTransition);
+      } else {
+        control._anchorOpacityFrame = 0;
+      }
+    };
+    control._anchorOpacityFrame = requestAnimationFrame(followTransition);
   }
 
   function syncPreviews() {
@@ -92,7 +128,8 @@
         observedPreviews.add(preview);
         preview.addEventListener('pointermove', () => {
           const current = preview.querySelector('.anchor-yt-preview-control');
-          if (current) fadePreviewBackground(current);
+          const currentPlayer = current?.closest('#inline-preview-player');
+          if (current && currentPlayer) syncPreviewBackground(current, currentPlayer);
         }, { passive: true });
       }
       if (media && !observedPreviewVideos.has(media)) {
@@ -111,7 +148,6 @@
       if (!button && media.paused && !shortPreview) continue;
       const controls = player.querySelector('.ytInlinePlayerControlsTopRightControls');
       activePlayers.add(player);
-      let createdControl = false;
       if (!control || !button) {
         control?.remove();
         control = document.createElement('div');
@@ -129,7 +165,6 @@
         });
         icon.append(button);
         control.append(icon);
-        createdControl = true;
       }
       // Keep the control outside YouTube's fixed-height stack, which clips extra children.
       if (control.parentElement !== player) player.append(control);
@@ -155,7 +190,7 @@
         : controlsRect?.width ? playerRect.right - controlsRect.right : 12;
       control.style.top = `${Math.max(0, top)}px`;
       control.style.right = `${Math.max(0, right)}px`;
-      if (createdControl) fadePreviewBackground(control);
+      syncPreviewBackground(control, player);
       button.dataset.url = url;
       // Keep an accessible name without showing the browser's large native tooltip over the preview.
       button.title = '';
@@ -168,7 +203,7 @@
       } else if (!control._anchorRemovalTimer) {
         // Let the preview's native controls finish their short fade before removing ours with them.
         control._anchorRemovalTimer = setTimeout(() => {
-          clearTimeout(control._anchorBackgroundTimer);
+          cancelAnimationFrame(control._anchorOpacityFrame);
           control.remove();
         }, 280);
       }
@@ -359,11 +394,13 @@
   document.addEventListener('webkitfullscreenchange', schedule);
   window.addEventListener('resize', schedule, { passive: true });
   window.addEventListener('popstate', schedule);
-  new MutationObserver(schedule).observe(document.documentElement, {
+  new MutationObserver((records) => {
+    if (records.some(({ target }) => !target.closest?.('.anchor-yt-preview-control, #anchor-yt'))) schedule();
+  }).observe(document.documentElement, {
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ['class'],
+    attributeFilter: ['class', 'style'],
   });
   schedule();
 })();
