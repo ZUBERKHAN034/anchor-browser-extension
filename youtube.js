@@ -302,6 +302,33 @@
       || document.querySelector('#movie_player.ytp-fullscreen, ytd-watch-flexy[fullscreen], ytd-player[fullscreen]'));
   }
 
+  function positionFullscreenButton(root, actions) {
+    const player = document.querySelector('#movie_player');
+    const playerRect = player?.getBoundingClientRect();
+    if (!playerRect) return;
+
+    const actionRect = actions?.getBoundingClientRect();
+    const actionVisible = actionRect?.width > 0 && actionRect?.height > 0
+      && actionRect.bottom > 0 && actionRect.top < window.innerHeight
+      && actionRect.right > 0 && actionRect.left < window.innerWidth
+      && actionRect.top >= playerRect.top && actionRect.bottom <= playerRect.bottom;
+    const left = actionVisible
+      ? actionRect.left - 48
+      : playerRect.right - Math.min(440, playerRect.width * 0.3);
+    const top = actionVisible
+      ? actionRect.top + (actionRect.height - 40) / 2
+      : playerRect.bottom - 100;
+    root.style.left = `${Math.max(8, left)}px`;
+    root.style.top = `${Math.max(8, top)}px`;
+    root.style.right = 'auto';
+    root.style.bottom = 'auto';
+  }
+
+  function fullscreenHost() {
+    const element = document.fullscreenElement || document.webkitFullscreenElement;
+    return element instanceof HTMLElement && element.tagName !== 'VIDEO' ? element : document.body;
+  }
+
   // When the page last changed. Its layout takes a moment to arrive; after that, the button floats instead.
   let navigatedAt = Date.now();
   const LAYOUT_WAIT = 3000;
@@ -319,26 +346,24 @@
     const target = anchorPoint();
     const fullscreen = isFullscreen();
     const shorts = location.pathname.startsWith('/shorts/');
-    // In fullscreen, keep the download button in the watch action row beside Like/Dislike;
-    // never fall back to a floating button over the video itself.
-    if (fullscreen && !target) {
-      root?.remove();
-      return;
-    }
     // Shorts has a dedicated action rail; never place a floating fallback over its video.
-    if (shorts && !target) {
+    if (!fullscreen && shorts && !target) {
       root?.remove();
       return;
     }
-    const before = shorts ? target.querySelector('like-button-view-model') : null;
-    if (shorts && !before) {
+    const before = shorts && target ? target.querySelector('like-button-view-model') : null;
+    if (!fullscreen && shorts && !before) {
       root?.remove();
       return;
     }
-    const floating = !target;
+    const floating = !fullscreen && !target;
+    if (fullscreen && root?.classList.contains('anchor-yt-fullscreen')) {
+      positionFullscreenButton(root, target);
+    }
     if (root && root.dataset.key === key && root.classList.contains('anchor-yt-floating') === floating
+        && root.classList.contains('anchor-yt-fullscreen') === fullscreen
         && root.classList.contains('anchor-yt-short') === shorts
-        && (floating || (root.parentElement === target && (shorts ? root.nextElementSibling === before : true)))) return;
+        && (floating || fullscreen || (root.parentElement === target && (shorts ? root.nextElementSibling === before : true)))) return;
     if (floating && Date.now() - navigatedAt < LAYOUT_WAIT) {
       // Give the page's own layout a moment to arrive; float only if it doesn't (YouTube changed its markup).
       setTimeout(schedule, LAYOUT_WAIT);
@@ -348,13 +373,15 @@
     root = document.createElement('div');
     root.id = ROOT_ID;
     root.dataset.key = key;
-    root.className = `${floating ? 'anchor-yt-floating' : 'anchor-yt-inline'}${shorts ? ' anchor-yt-short' : ''}`;
+    root.className = `${fullscreen ? 'anchor-yt-fullscreen' : floating ? 'anchor-yt-floating' : 'anchor-yt-inline'}${shorts ? ' anchor-yt-short' : ''}`;
     // A playlist's header sits on a dark backdrop in both themes, like the buttons YouTube puts there.
     if (!floating && location.pathname === '/playlist') root.classList.add('anchor-yt-overlay');
     build(root);
     if (floating) document.body.append(root);
+    else if (fullscreen) fullscreenHost().append(root);
     else if (shorts) target.insertBefore(root, before);
     else target.prepend(root);
+    if (fullscreen) positionFullscreenButton(root, target);
   }
 
   // YouTube swaps pages without reloading and redraws parts of them: check again after each change, at most once

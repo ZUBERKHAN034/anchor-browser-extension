@@ -220,6 +220,37 @@ html[dark] .anchor-yt-overlay .anchor-yt-button:hover {
   background: rgba(255, 255, 255, 0.22);
 }
 
+/* Fullscreen uses a separate logo beside the on-video Like/Dislike action row. */
+#anchor-yt.anchor-yt-fullscreen,
+#anchor-yt.anchor-yt-fullscreen.anchor-yt-short {
+  position: fixed;
+  z-index: 2147483000;
+  display: flex;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  gap: 0;
+}
+
+.anchor-yt-fullscreen .anchor-yt-button {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(33, 33, 33, 0.78);
+}
+
+.anchor-yt-fullscreen .anchor-yt-button:hover {
+  background: rgba(33, 33, 33, 0.92);
+}
+
+.anchor-yt-fullscreen .anchor-yt-label,
+.anchor-yt-fullscreen .anchor-yt-chevron {
+  display: none;
+}
+
 .anchor-yt-button.anchor-yt-failed {
   color: #c4532e;
 }
