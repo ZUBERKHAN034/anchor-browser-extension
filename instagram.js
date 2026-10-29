@@ -269,14 +269,9 @@
       while (node.parentElement) {
         const parent = node.parentElement;
         if (parent.children.length >= 3 && parent.querySelectorAll(OTHER_ACTION_ICONS).length >= 2) {
-          const saveIcon = [...parent.querySelectorAll('svg[aria-label="Save"]')].find(visible);
-          if (!saveIcon) {
-            node = parent;
-            continue;
-          }
-          let saveGroup = saveIcon;
-          while (saveGroup.parentElement && saveGroup.parentElement !== parent) saveGroup = saveGroup.parentElement;
-          if (saveGroup.parentElement === parent) return { rail: parent, saveGroup };
+          let likeGroup = likeIcon;
+          while (likeGroup.parentElement && likeGroup.parentElement !== parent) likeGroup = likeGroup.parentElement;
+          if (likeGroup.parentElement === parent) return { rail: parent, likeGroup };
         }
         node = parent;
       }
@@ -294,7 +289,7 @@
       return;
     }
     if (root?.dataset.url === url && root.parentElement === target.rail
-        && root.nextElementSibling === target.saveGroup) return;
+        && root.nextElementSibling === target.likeGroup) return;
     root?.remove();
     root = document.createElement('div');
     root.id = ROOT_ID;
@@ -311,7 +306,7 @@
       send(url, button);
     });
     root.append(button);
-    target.rail.insertBefore(root, target.saveGroup);
+    target.rail.insertBefore(root, target.likeGroup);
   }
 
   let queued = false;
