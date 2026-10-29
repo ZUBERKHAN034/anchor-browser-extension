@@ -6,9 +6,10 @@
   "permissions": ["downloads", "downloads.ui", "contextMenus", "cookies", "storage", "alarms", "nativeMessaging"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js" },
-  "web_accessible_resources": [{ "resources": ["icon128.png"], "matches": ["https://www.youtube.com/*"] }],
+  "web_accessible_resources": [{ "resources": ["icon128.png"], "matches": ["https://www.youtube.com/*", "https://www.instagram.com/*"] }],
   "content_scripts": [
-    { "matches": ["https://www.youtube.com/*"], "js": ["youtube.js"], "css": ["youtube.css"], "run_at": "document_idle" }
+    { "matches": ["https://www.youtube.com/*"], "js": ["youtube.js"], "css": ["youtube.css"], "run_at": "document_idle" },
+    { "matches": ["https://www.instagram.com/*"], "js": ["instagram.js"], "css": ["instagram.css"], "run_at": "document_idle" }
   ],
   "action": {
     "default_popup": "popup.html",

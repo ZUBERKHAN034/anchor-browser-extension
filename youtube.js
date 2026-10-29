@@ -4,12 +4,16 @@
 (() => {
   const ROOT_ID = 'anchor-yt';
   // The app icon, as on the Dock.
-  const ICON = `<img class="anchor-yt-icon" src="${chrome.runtime.getURL('icon128.png')}" alt="">`;
+  const ICON = `<span class="anchor-yt-mark"><img class="anchor-yt-icon" src="${chrome.runtime.getURL('icon128.png')}" alt=""><span class="anchor-yt-spinner" aria-hidden="true"></span></span>`;
+  // A white, transparent version of Anchor's mark for YouTube's hover player controls.
+  const PREVIEW_ICON = `<span class="anchor-yt-mark"><svg class="anchor-yt-preview-mark" viewBox="0 0 128 128" aria-hidden="true"><circle cx="64" cy="19" r="8"/><path d="M64 29v58M43 48h42M30 77c4 17 17 29 34 29s30-12 34-29M30 77l-2 16 15-7M98 77l2 16-15-7"/></svg><span class="anchor-yt-spinner" aria-hidden="true"></span></span>`;
   const CHEVRON = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M7 10l5 5 5-5" fill="none"
     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
   // The video on a watch page, as a plain link (without the playlist or the time).
   function videoLink() {
+    const short = location.pathname.match(/^\/shorts\/([^/]+)/);
+    if (short) return `https://www.youtube.com/watch?v=${short[1]}`;
     if (location.pathname !== '/watch') return null;
     const id = new URL(location.href).searchParams.get('v');
     return id ? `https://www.youtube.com/watch?v=${id}` : null;
@@ -23,15 +27,19 @@
   }
 
   // Hands a link to Anchor, showing how it went on the button for a moment.
-  function send(url, button, label) {
-    const text = button.querySelector('span');
-    text.textContent = 'Sending…';
+  function send(url, button) {
+    const idleLabel = button.getAttribute('aria-label') || button.title;
+    button.classList.add('anchor-yt-sending');
+    button.setAttribute('aria-busy', 'true');
+    button.setAttribute('aria-label', 'Sending to Anchor');
     chrome.runtime.sendMessage({ type: 'anchor-download', url, referrer: location.href }, (reply) => {
       const ok = !chrome.runtime.lastError && reply?.ok;
-      text.textContent = ok ? 'Sent to Anchor' : 'Anchor isn’t running';
+      button.classList.remove('anchor-yt-sending');
+      button.removeAttribute('aria-busy');
+      button.setAttribute('aria-label', ok ? 'Sent to Anchor' : 'Anchor isn’t running');
       button.classList.toggle('anchor-yt-failed', !ok);
       setTimeout(() => {
-        text.textContent = label;
+        button.setAttribute('aria-label', idleLabel);
         button.classList.remove('anchor-yt-failed');
       }, 2500);
     });
@@ -42,9 +50,64 @@
     el.type = 'button';
     el.className = 'anchor-yt-button';
     el.title = title;
-    el.innerHTML = `${ICON}<span>${label}</span>${withMenu ? CHEVRON : ''}`;
+    el.setAttribute('aria-label', title);
+    el.innerHTML = `${ICON}<span class="anchor-yt-label">${label}</span>${withMenu ? `<span class="anchor-yt-chevron">${CHEVRON}</span>` : ''}`;
     if (withMenu) el.setAttribute('aria-haspopup', 'menu');
     return el;
+  }
+
+  function previewVideoLink(preview) {
+    const raw = preview.querySelector('.ytp-title-link')?.href
+      || preview.querySelector('.ytdVideoPreviewMediaContainerLink[href]')?.href;
+    if (!raw) return null;
+    try {
+      const url = new URL(raw, location.origin);
+      const id = url.searchParams.get('v') || url.pathname.match(/^\/shorts\/([^/]+)/)?.[1];
+      return id ? `https://www.youtube.com/watch?v=${id}` : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // The compact control belongs to YouTube's playing hover preview, including Shorts previews.
+  const observedPreviewVideos = new WeakSet();
+  function syncPreviews() {
+    const previews = document.querySelectorAll('ytd-video-preview.ytdVideoPreviewActive');
+    const activePlayers = new Set();
+    for (const preview of previews) {
+      const player = preview.querySelector('#inline-preview-player');
+      const media = player?.querySelector('video');
+      const url = previewVideoLink(preview);
+      if (media && !observedPreviewVideos.has(media)) {
+        observedPreviewVideos.add(media);
+        media.addEventListener('play', schedule);
+        media.addEventListener('pause', schedule);
+        media.addEventListener('ended', schedule);
+      }
+      if (!player || !media || media.paused || !url || !player.isConnected) continue;
+
+      activePlayers.add(player);
+      let button = player.querySelector('.anchor-yt-preview-button');
+      if (!button) {
+        button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'anchor-yt-button anchor-yt-preview-button';
+        button.innerHTML = `${PREVIEW_ICON}<span class="anchor-yt-label">Download with Anchor</span>`;
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          send(button.dataset.url, button);
+        });
+        player.append(button);
+      }
+      button.dataset.url = url;
+      // Keep an accessible name without showing the browser's large native tooltip over the preview.
+      button.title = '';
+      button.setAttribute('aria-label', 'Download this video with Anchor');
+    }
+    document.querySelectorAll('.anchor-yt-preview-button').forEach((button) => {
+      if (!activePlayers.has(button.closest('#inline-preview-player'))) button.remove();
+    });
   }
 
   // "This video" or "Whole playlist", under the button. It lives on the page body at a fixed position, since
@@ -75,7 +138,7 @@
         event.preventDefault();
         event.stopPropagation();
         close();
-        send(url, button, label);
+        send(url, button);
       });
       menu.append(item);
     }
@@ -112,7 +175,7 @@
         button.addEventListener('click', (event) => {
           event.preventDefault();
           event.stopPropagation();
-          send(video, button, 'Anchor');
+          send(video, button);
         });
         root.append(button);
       }];
@@ -123,7 +186,7 @@
         button.addEventListener('click', (event) => {
           event.preventDefault();
           event.stopPropagation();
-          send(list, button, 'Download playlist');
+          send(list, button);
         });
         root.append(button);
       }];
@@ -144,6 +207,9 @@
 
   // Where the button goes: in the row with Like and Share on a watch page; in the header actions on a playlist page.
   function anchorPoint() {
+    if (location.pathname.startsWith('/shorts/')) {
+      return firstVisible(['reel-action-bar-view-model']);
+    }
     if (location.pathname === '/watch') {
       return firstVisible(['ytd-watch-metadata #top-level-buttons-computed', 'ytd-watch-metadata #actions-inner']);
     }
@@ -156,23 +222,41 @@
     return null;
   }
 
+  function isFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement
+      || document.querySelector('#movie_player.ytp-fullscreen, ytd-watch-flexy[fullscreen], ytd-player[fullscreen]'));
+  }
+
   // When the page last changed. Its layout takes a moment to arrive; after that, the button floats instead.
   let navigatedAt = Date.now();
   const LAYOUT_WAIT = 3000;
 
   function sync() {
+    syncPreviews();
     const wanted = plan();
     let root = document.getElementById(ROOT_ID);
-    if (!wanted) {
+    if (!wanted || isFullscreen()) {
       root?.remove();
       document.querySelectorAll('.anchor-yt-menu').forEach((menu) => menu.remove());
       return;
     }
     const [key, build] = wanted;
     const target = anchorPoint();
+    const shorts = location.pathname.startsWith('/shorts/');
+    // Shorts has a dedicated action rail; never place a floating fallback over its video.
+    if (shorts && !target) {
+      root?.remove();
+      return;
+    }
+    const before = shorts ? target.querySelector('like-button-view-model') : null;
+    if (shorts && !before) {
+      root?.remove();
+      return;
+    }
     const floating = !target;
     if (root && root.dataset.key === key && root.classList.contains('anchor-yt-floating') === floating
-        && (floating || root.parentElement === target)) return;
+        && root.classList.contains('anchor-yt-short') === shorts
+        && (floating || (root.parentElement === target && (shorts ? root.nextElementSibling === before : true)))) return;
     if (floating && Date.now() - navigatedAt < LAYOUT_WAIT) {
       // Give the page's own layout a moment to arrive; float only if it doesn't (YouTube changed its markup).
       setTimeout(schedule, LAYOUT_WAIT);
@@ -182,11 +266,12 @@
     root = document.createElement('div');
     root.id = ROOT_ID;
     root.dataset.key = key;
-    root.className = floating ? 'anchor-yt-floating' : 'anchor-yt-inline';
+    root.className = `${floating ? 'anchor-yt-floating' : 'anchor-yt-inline'}${shorts ? ' anchor-yt-short' : ''}`;
     // A playlist's header sits on a dark backdrop in both themes, like the buttons YouTube puts there.
     if (!floating && location.pathname === '/playlist') root.classList.add('anchor-yt-overlay');
     build(root);
     if (floating) document.body.append(root);
+    else if (shorts) target.insertBefore(root, before);
     else target.prepend(root);
   }
 
@@ -205,7 +290,15 @@
     navigatedAt = Date.now();
     schedule();
   });
+  document.addEventListener('fullscreenchange', schedule);
+  document.addEventListener('webkitfullscreenchange', schedule);
+  window.addEventListener('resize', schedule, { passive: true });
   window.addEventListener('popstate', schedule);
-  new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true });
+  new MutationObserver(schedule).observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class'],
+  });
   schedule();
 })();

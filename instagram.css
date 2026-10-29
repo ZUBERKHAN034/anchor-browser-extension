@@ -1,0 +1,70 @@
+/* Inline Anchor action before Instagram's Like control; never floats over the Reel. */
+#anchor-ig {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  margin: 0 0 10px;
+}
+
+.anchor-ig-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #fff;
+  background: transparent;
+}
+
+.anchor-ig-button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.anchor-ig-icon {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  transition: opacity 120ms ease;
+}
+
+.anchor-ig-mark {
+  position: relative;
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  place-items: center;
+}
+
+.anchor-ig-spinner {
+  position: absolute;
+  inset: -4px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.anchor-ig-sending .anchor-ig-icon {
+  opacity: 0.35;
+}
+
+.anchor-ig-sending .anchor-ig-spinner {
+  opacity: 1;
+  animation: anchor-ig-spin 700ms linear infinite;
+}
+
+@keyframes anchor-ig-spin {
+  to { transform: rotate(360deg); }
+}
+
+.anchor-ig-button.anchor-ig-failed {
+  color: #ff9d82;
+}
