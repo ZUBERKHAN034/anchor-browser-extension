@@ -69,6 +69,46 @@
     }
   }
 
+  function playlistUrlFrom(raw) {
+    if (!raw) return null;
+    try {
+      const list = new URL(raw, location.origin).searchParams.get('list');
+      return list && !list.startsWith('RD')
+        ? `https://www.youtube.com/playlist?list=${encodeURIComponent(list)}`
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function previewPlaylistLink(preview, sourceHref) {
+    const currentPlaylist = playlistLink();
+    if (currentPlaylist) return currentPlaylist;
+
+    const titleHref = preview.querySelector('.ytp-title-link')?.href || '';
+    const hrefs = [sourceHref, titleHref, ...[...preview.querySelectorAll('a[href]')].map((link) => link.href)];
+    for (const href of hrefs) {
+      const list = playlistUrlFrom(href);
+      if (list) return list;
+    }
+
+    const playlistCard = preview.closest([
+      'ytd-playlist-video-renderer',
+      'ytd-playlist-panel-video-renderer',
+      'ytd-playlist-renderer',
+      'ytd-grid-playlist-renderer',
+      'ytd-compact-playlist-renderer',
+      'ytd-rich-item-renderer',
+    ].join(', '));
+    if (playlistCard) {
+      for (const link of playlistCard.querySelectorAll('a[href]')) {
+        const list = playlistUrlFrom(link.href);
+        if (list) return list;
+      }
+    }
+    return null;
+  }
+
   // The compact control belongs to YouTube's playing hover preview, including Shorts previews.
   const observedPreviewVideos = new WeakSet();
 
@@ -106,6 +146,7 @@
       if (!player || !media || !url || !player.isConnected) continue;
 
       const sourceHref = preview.querySelector('.ytdVideoPreviewMediaContainerLink[href]')?.getAttribute('href') || '';
+      const playlistUrl = previewPlaylistLink(preview, sourceHref);
       const shortPreview = /^\/shorts\//.test(sourceHref)
         || (media.videoWidth > 0 && media.videoHeight > media.videoWidth);
       let control = player.querySelector('.anchor-yt-preview-control');
@@ -124,13 +165,15 @@
         button.type = 'button';
         button.className = 'anchor-yt-preview-button';
         button.innerHTML = PREVIEW_ICON;
-        button.addEventListener('click', (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          send(button.dataset.url, button);
-        });
         icon.append(button);
         control.append(icon);
+        attachMenu(control, button, 'Anchor', () => {
+          const videoUrl = button.dataset.url;
+          const listUrl = button.dataset.playlistUrl;
+          return listUrl
+            ? [['This video', videoUrl], ['Whole playlist', listUrl]]
+            : [['This video', videoUrl]];
+        }, true);
         createdControl = true;
       }
       // Keep the control outside YouTube's fixed-height stack, which clips extra children.
@@ -150,8 +193,8 @@
       const captionRect = visibleNativeRect('.ytmClosedCaptioningButtonButton');
       const lastNativeControl = captionRect || muteRect;
       const playlistQuickPreview = location.pathname === '/playlist'
-        || !!playlistLink()
-        || !!preview.closest('ytd-playlist-panel-video-renderer, ytd-playlist-video-renderer')
+        || !!playlistUrl
+        || !!preview.closest('ytd-playlist-panel-video-renderer, ytd-playlist-video-renderer, ytd-playlist-renderer, ytd-grid-playlist-renderer, ytd-compact-playlist-renderer, ytd-rich-item-renderer')
         || /[?&]list=/.test(sourceHref);
       const top = lastNativeControl
         ? lastNativeControl.bottom - playerRect.top + 4
@@ -167,6 +210,7 @@
       const videoChanged = button.dataset.url && button.dataset.url !== url;
       if (createdControl || videoChanged) fadePreviewBackground(control);
       button.dataset.url = url;
+      button.dataset.playlistUrl = playlistUrl || '';
       // Keep an accessible name without showing the browser's large native tooltip over the preview.
       button.title = '';
       button.setAttribute('aria-label', 'Download this video with Anchor');
@@ -187,8 +231,10 @@
 
   // "This video" or "Whole playlist", under the button. It lives on the page body at a fixed position, since
   // YouTube's action row clips anything that sticks out of it.
-  function attachMenu(root, button, label, choices) {
+  function attachMenu(root, button, label, choices, directWhenSingle = false) {
     document.querySelectorAll('.anchor-yt-menu').forEach((old) => old.remove());
+    button.setAttribute('aria-haspopup', 'menu');
+    button.setAttribute('aria-expanded', 'false');
     const menu = document.createElement('div');
     menu.className = 'anchor-yt-menu';
     menu.setAttribute('role', 'menu');
@@ -197,39 +243,60 @@
       menu.hidden = true;
       button.setAttribute('aria-expanded', 'false');
     };
-    const open = () => {
+    const currentChoices = () => typeof choices === 'function' ? choices() : choices;
+    const renderChoices = (items) => {
+      menu.replaceChildren();
+      for (const [title, url] of items) {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.setAttribute('role', 'menuitem');
+        item.textContent = title;
+        item.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          close();
+          send(url, button);
+        });
+        menu.append(item);
+      }
+    };
+    const open = (items) => {
+      renderChoices(items);
       const rect = button.getBoundingClientRect();
       menu.style.left = `${Math.round(rect.left)}px`;
       menu.style.top = `${Math.round(rect.bottom + 6)}px`;
       menu.hidden = false;
       button.setAttribute('aria-expanded', 'true');
     };
-    for (const [title, url] of choices) {
-      const item = document.createElement('button');
-      item.type = 'button';
-      item.setAttribute('role', 'menuitem');
-      item.textContent = title;
-      item.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        close();
-        send(url, button);
-      });
-      menu.append(item);
-    }
     button.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
-      if (menu.hidden) open(); else close();
+      const items = currentChoices();
+      if (directWhenSingle && items.length === 1) {
+        close();
+        send(items[0][1], button);
+      } else if (menu.hidden) open(items);
+      else close();
     });
-    document.addEventListener('click', (event) => {
+    const onDocumentClick = (event) => {
       if (!root.contains(event.target) && !menu.contains(event.target)) close();
-    }, true);
-    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') close(); });
+    };
+    const onDocumentKeyDown = (event) => { if (event.key === 'Escape') close(); };
+    document.addEventListener('click', onDocumentClick, true);
+    document.addEventListener('keydown', onDocumentKeyDown);
     window.addEventListener('scroll', close, { passive: true });
     window.addEventListener('resize', close);
     // Gone with the button when YouTube moves to another page.
-    new MutationObserver(() => { if (!root.isConnected) menu.remove(); }).observe(document.body, { childList: true, subtree: true });
+    const observer = new MutationObserver(() => {
+      if (root.isConnected) return;
+      menu.remove();
+      observer.disconnect();
+      document.removeEventListener('click', onDocumentClick, true);
+      document.removeEventListener('keydown', onDocumentKeyDown);
+      window.removeEventListener('scroll', close);
+      window.removeEventListener('resize', close);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
     document.body.append(menu);
   }
 
