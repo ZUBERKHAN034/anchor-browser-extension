@@ -135,6 +135,7 @@ html[dark] .anchor-yt-overlay .anchor-yt-button:hover {
   height: 40px;
   margin: 0;
   opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 .anchor-yt-preview-control::before {
@@ -177,6 +178,7 @@ html[dark] .anchor-yt-overlay .anchor-yt-button:hover {
   cursor: pointer;
   color: #fff;
   background: transparent;
+  pointer-events: auto !important;
 }
 
 .anchor-yt-preview-mark {
@@ -251,6 +253,27 @@ html[dark] .anchor-yt-overlay .anchor-yt-button:hover {
   display: none;
 }
 
+/* Playlist videos keep the icon-only fullscreen button, with a small cue that it opens a menu. */
+.anchor-yt-fullscreen .anchor-yt-button[aria-haspopup="menu"] .anchor-yt-chevron {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(36, 33, 35, 0.96);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7));
+}
+
+.anchor-yt-fullscreen .anchor-yt-button[aria-haspopup="menu"] .anchor-yt-chevron svg {
+  width: 10px;
+  height: 10px;
+}
+
 .anchor-yt-button.anchor-yt-failed {
   color: #c4532e;
 }
@@ -263,7 +286,7 @@ html[dark] .anchor-yt-overlay .anchor-yt-button:hover {
 
 .anchor-yt-menu {
   position: fixed;
-  z-index: 2202;
+  z-index: 2147483001;
   min-width: 170px;
   padding: 8px 0;
   border-radius: 12px;

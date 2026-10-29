@@ -302,7 +302,7 @@
           return listUrl
             ? [['This Video', videoUrl], ['Whole playlist', listUrl]]
             : [['This Video', videoUrl]];
-        }, true);
+        });
         createdControl = true;
       }
       // Keep the control outside YouTube's fixed-height stack, which clips extra children.
