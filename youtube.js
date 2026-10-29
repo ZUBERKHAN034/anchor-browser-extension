@@ -71,7 +71,6 @@
 
   // The compact control belongs to YouTube's playing hover preview, including Shorts previews.
   const observedPreviewVideos = new WeakSet();
-  const observedPreviews = new WeakSet();
 
   function fadePreviewBackground(control) {
     control.classList.remove('anchor-yt-preview-background-faded');
@@ -82,6 +81,18 @@
     }, 2200);
   }
 
+  function revealPreviewBackground(event) {
+    const preview = event.composedPath().find((node) =>
+      node instanceof Element && node.matches('ytd-video-preview.ytdVideoPreviewActive'));
+    const control = preview?.querySelector('.anchor-yt-preview-control');
+    if (control) fadePreviewBackground(control);
+  }
+
+  // Capture events from YouTube's nested player/video controls so movement over the preview
+  // reveals the Anchor background just like movement over the button itself.
+  document.addEventListener('pointerover', revealPreviewBackground, { capture: true, passive: true });
+  document.addEventListener('pointermove', revealPreviewBackground, { capture: true, passive: true });
+
   function syncPreviews() {
     const previews = document.querySelectorAll('ytd-video-preview.ytdVideoPreviewActive');
     const activePlayers = new Set();
@@ -89,15 +100,6 @@
       const player = preview.querySelector('#inline-preview-player');
       const media = player?.querySelector('video');
       const url = previewVideoLink(preview);
-      if (!observedPreviews.has(preview)) {
-        observedPreviews.add(preview);
-        for (const eventName of ['pointermove', 'pointerenter', 'pointerleave']) {
-          preview.addEventListener(eventName, () => {
-            const current = preview.querySelector('.anchor-yt-preview-control');
-            if (current) fadePreviewBackground(current);
-          }, { passive: true });
-        }
-      }
       if (media && !observedPreviewVideos.has(media)) {
         observedPreviewVideos.add(media);
         media.addEventListener('play', schedule);
