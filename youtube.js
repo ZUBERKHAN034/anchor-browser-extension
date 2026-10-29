@@ -78,17 +78,22 @@
   function previewControlOpacity(control) {
     const player = control.closest('#inline-preview-player');
     const preview = player?.closest('ytd-video-preview');
-    const nativeControl = [player, preview].filter(Boolean)
-      .flatMap((root) => [...root.querySelectorAll('.ytmClosedCaptioningButtonButton, .ytmMuteButtonButton')])
-      .find((element) => {
-        const rect = element.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0;
-      });
-    if (!player || !nativeControl) return 1;
+    if (!player) return 1;
+    const roots = [player, preview].filter(Boolean);
+    const visible = (element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    };
+    // YouTube often fades the whole top-right control group, leaving each child at opacity 1.
+    const source = roots.flatMap((root) => [...root.querySelectorAll('.ytInlinePlayerControlsTopRightControls')])
+      .find(visible)
+      || roots.flatMap((root) => [...root.querySelectorAll('.ytmClosedCaptioningButtonButton, .ytmMuteButtonButton')])
+        .find(visible);
+    if (!source) return 1;
 
     let opacity = 1;
-    const boundary = nativeControl.closest('#inline-preview-player') || preview;
-    for (let element = nativeControl; element; element = element.parentElement) {
+    const boundary = source.closest('#inline-preview-player') || preview;
+    for (let element = source; element; element = element.parentElement) {
       const style = getComputedStyle(element);
       if (style.display === 'none' || style.visibility === 'hidden') return 0;
       opacity *= Number.parseFloat(style.opacity) || 0;
@@ -99,16 +104,22 @@
 
   function syncPreviewBackgrounds() {
     let transitioning = false;
+    const now = performance.now();
     document.querySelectorAll('.anchor-yt-preview-control').forEach((control) => {
       const opacity = previewControlOpacity(control);
       control.style.setProperty('--anchor-preview-background-opacity', String(opacity));
       control.classList.toggle('anchor-yt-preview-background-faded', opacity < 0.01);
       transitioning ||= opacity > 0.01 && opacity < 0.99;
+      transitioning ||= now < (control._anchorFadeWatchUntil || 0);
     });
     previewFadeFrame = transitioning ? requestAnimationFrame(syncPreviewBackgrounds) : 0;
   }
 
   function schedulePreviewBackgroundSync() {
+    document.querySelectorAll('.anchor-yt-preview-control').forEach((control) => {
+      // YouTube delays its autohide after pointer activity, then animates the native control group.
+      control._anchorFadeWatchUntil = performance.now() + 2600;
+    });
     if (!previewFadeFrame) previewFadeFrame = requestAnimationFrame(syncPreviewBackgrounds);
   }
 
@@ -121,10 +132,11 @@
       const url = previewVideoLink(preview);
       if (!observedPreviews.has(preview)) {
         observedPreviews.add(preview);
-        preview.addEventListener('pointermove', () => {
-          const current = preview.querySelector('.anchor-yt-preview-control');
-          if (current) schedulePreviewBackgroundSync();
-        }, { passive: true });
+        for (const eventName of ['pointermove', 'pointerenter', 'pointerleave']) {
+          preview.addEventListener(eventName, () => {
+            if (preview.querySelector('.anchor-yt-preview-control')) schedulePreviewBackgroundSync();
+          }, { passive: true });
+        }
       }
       if (media && !observedPreviewVideos.has(media)) {
         observedPreviewVideos.add(media);
