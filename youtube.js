@@ -72,163 +72,6 @@
     return null;
   }
 
-  function playlistUrlFromId(list) {
-    return list && !list.startsWith('RD')
-      ? `https://www.youtube.com/playlist?list=${encodeURIComponent(list)}`
-      : null;
-  }
-
-  function playlistUrlFrom(raw) {
-    if (!raw) return null;
-    // Read the raw query too: YouTube's quick-view links can be copied into hrefs as
-    // `...?v=VIDEO&amp;list=PLAYLIST`, and the playlist parameter may follow `&list=`.
-    const rawList = String(raw).match(/[?&](?:amp;)?list=([^&#]+)/i)?.[1];
-    if (rawList) {
-      try {
-        const list = decodeURIComponent(rawList.replace(/&amp;/gi, '&'));
-        const fromRawQuery = playlistUrlFromId(list);
-        if (fromRawQuery) return fromRawQuery;
-      } catch {}
-    }
-    try {
-      const normalized = String(raw).replace(/&amp;/gi, '&');
-      const list = new URL(normalized, location.origin).searchParams.get('list');
-      return playlistUrlFromId(list);
-    } catch {
-      return null;
-    }
-  }
-
-  function videoIdFrom(raw) {
-    if (!raw) return null;
-    try {
-      const url = new URL(raw, location.origin);
-      return url.searchParams.get('v') || url.pathname.match(/^\/shorts\/([^/]+)/)?.[1] || null;
-    } catch {
-      return null;
-    }
-  }
-
-  const previewCardSelector = [
-    'ytd-playlist-video-renderer',
-    'ytd-playlist-panel-video-renderer',
-    'ytd-playlist-renderer',
-    'ytd-grid-playlist-renderer',
-    'ytd-compact-playlist-renderer',
-    'ytd-playlist-thumbnail',
-    'ytd-rich-item-renderer',
-    'ytd-rich-grid-media',
-    'yt-lockup-view-model',
-    'yt-playlist-lockup-view-model',
-  ].join(', ');
-  let hoveredPlaylistContext = null;
-
-  // YouTube portals the hover player outside its source card, so the preview no longer has an
-  // ancestor link to the playlist. Remember the playlist on the card that opened the preview.
-  document.addEventListener('pointerover', (event) => {
-    const target = event.composedPath().find((node) => node instanceof Element);
-    if (!target || target.closest('ytd-video-preview')) return;
-    const card = target.closest(previewCardSelector);
-    if (!card) return;
-    const links = [...card.querySelectorAll('a[href]')];
-    const playlist = links.map((link) => playlistUrlFrom(link.href)).find(Boolean);
-    hoveredPlaylistContext = playlist ? { url: playlist, at: Date.now() } : null;
-  }, { capture: true, passive: true });
-
-  function previewPlaylistLink(preview, sourceHref) {
-    const currentPlaylist = playlistLink();
-    if (currentPlaylist) return currentPlaylist;
-
-    const titleHref = preview.querySelector('.ytp-title-link')?.href || '';
-    const hrefs = [sourceHref, titleHref, ...[...preview.querySelectorAll('a[href]')].map((link) => link.href)];
-    for (const href of hrefs) {
-      const list = playlistUrlFrom(href);
-      if (list) return list;
-    }
-
-    const playlistCard = preview.closest([
-      'ytd-playlist-video-renderer',
-      'ytd-playlist-panel-video-renderer',
-      'ytd-playlist-renderer',
-      'ytd-grid-playlist-renderer',
-      'ytd-compact-playlist-renderer',
-      'ytd-rich-item-renderer',
-      'ytd-rich-grid-media',
-      'ytd-playlist-thumbnail',
-    ].join(', '));
-    const rendererPlaylistId = (node) => {
-      const data = node.data || node.__data?.data || node.__data;
-      return node.playlistId
-        || data?.playlistId
-        || data?.playlistRenderer?.playlistId
-        || data?.navigationEndpoint?.watchEndpoint?.playlistId
-        || data?.content?.playlistRenderer?.playlistId;
-    };
-    if (playlistCard) {
-      const cardNodes = [playlistCard, ...playlistCard.querySelectorAll('*')];
-      for (const node of cardNodes) {
-        const list = playlistUrlFromId(rendererPlaylistId(node))
-          || ['playlist-id', 'data-playlist-id', 'data-list-id', 'list']
-            .map((attribute) => playlistUrlFromId(node.getAttribute(attribute)))
-            .find(Boolean);
-        if (list) return list;
-      }
-      for (const link of playlistCard.querySelectorAll('a[href]')) {
-        const list = playlistUrlFrom(link.href);
-        if (list) return list;
-      }
-    }
-
-    // Some channel playlist quick views render their player in a nested preview element without
-    // carrying the list parameter on the video link. Walk only nearby card wrappers for its playlist link.
-    for (let node = preview.parentElement, depth = 0; node && depth < 8; node = node.parentElement, depth += 1) {
-      if (node.matches('ytd-rich-grid-renderer, ytd-browse, ytd-page-manager, ytd-app')) break;
-      const list = playlistUrlFromId(rendererPlaylistId(node));
-      if (list) return list;
-      for (const attribute of ['playlist-id', 'data-playlist-id', 'data-list-id', 'list']) {
-        const list = playlistUrlFromId(node.getAttribute(attribute));
-        if (list) return list;
-      }
-      for (const link of node.querySelectorAll('a[href]')) {
-        const list = playlistUrlFrom(link.href);
-        if (list) return list;
-      }
-    }
-
-    if (hoveredPlaylistContext && Date.now() - hoveredPlaylistContext.at < 15000) {
-      return hoveredPlaylistContext.url;
-    }
-
-    // YouTube portals hover previews out of their cards. Playlist cards can also be rendered with
-    // newer lockup elements rather than the older ytd-* renderer tags, so search playlist links
-    // across the page and walk each link's card wrapper to find the one containing this video.
-    const videoId = videoIdFrom(preview.querySelector('.ytp-title-link')?.href)
-      || videoIdFrom(sourceHref);
-    if (videoId) {
-      const playlistLinks = document.querySelectorAll('a[href*="list="], [playlist-id], [data-playlist-id], [data-list-id]');
-      for (const source of playlistLinks) {
-        const sourceList = playlistUrlFrom(source.href || '')
-          || playlistUrlFromId(source.getAttribute('playlist-id'))
-          || playlistUrlFromId(source.getAttribute('data-playlist-id'))
-          || playlistUrlFromId(source.getAttribute('data-list-id'));
-        if (!sourceList) continue;
-
-        let card = source.closest(previewCardSelector);
-        // Some playlist link variants live on an element just outside the renderer. Climb a few
-        // levels and use the closest wrapper that also contains the preview video's link.
-        for (let node = card || source, depth = 0; node && depth < 5; node = node.parentElement, depth += 1) {
-          const links = [...node.querySelectorAll('a[href]')];
-          const containsVideo = links.some((link) => videoIdFrom(link.href) === videoId);
-          if (containsVideo) return sourceList;
-          if (depth > 0 && node.matches('ytd-rich-grid-renderer, ytd-browse, ytd-page-manager, ytd-app')) break;
-          if (card && node === card.parentElement) break;
-          if (!card && node.matches(previewCardSelector)) card = node;
-        }
-      }
-    }
-    return null;
-  }
-
   // The compact control belongs to YouTube's playing hover preview, including Shorts previews.
   const observedPreviewVideos = new WeakSet();
 
@@ -266,7 +109,6 @@
       if (!player || !media || !url || !player.isConnected) continue;
 
       const sourceHref = preview.querySelector('.ytdVideoPreviewMediaContainerLink[href]')?.getAttribute('href') || '';
-      const playlistUrl = previewPlaylistLink(preview, sourceHref);
       const shortPreview = /^\/shorts\//.test(sourceHref)
         || (media.videoWidth > 0 && media.videoHeight > media.videoWidth);
       let control = player.querySelector('.anchor-yt-preview-control');
@@ -287,21 +129,10 @@
         button.innerHTML = PREVIEW_ICON;
         icon.append(button);
         control.append(icon);
-        attachMenu(control, button, 'Anchor', () => {
-          const videoUrl = button.dataset.url;
-          // YouTube can mount the preview before its source playlist card finishes populating.
-          // Resolve once more on click so the quick-view menu sees the final card/URL state.
-          const livePreview = button.closest('ytd-video-preview') || preview;
-          const liveSourceHref = livePreview.querySelector('.ytdVideoPreviewMediaContainerLink[href]')?.getAttribute('href') || '';
-          const videoHref = livePreview.querySelector('.ytp-title-link[href], .ytdVideoPreviewMediaContainerLink[href]')?.getAttribute('href') || '';
-          const listUrl = playlistUrlFrom(liveSourceHref)
-            || playlistUrlFrom(videoHref)
-            || previewPlaylistLink(livePreview, liveSourceHref)
-            || button.dataset.playlistUrl;
-          button.dataset.playlistUrl = listUrl || '';
-          return listUrl
-            ? [['This Video', videoUrl], ['Whole playlist', listUrl]]
-            : [['This Video', videoUrl]];
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          send(button.dataset.url, button);
         });
         createdControl = true;
       }
@@ -322,7 +153,6 @@
       const captionRect = visibleNativeRect('.ytmClosedCaptioningButtonButton');
       const lastNativeControl = captionRect || muteRect;
       const playlistQuickPreview = location.pathname === '/playlist'
-        || !!playlistUrl
         || !!preview.closest('ytd-playlist-panel-video-renderer, ytd-playlist-video-renderer, ytd-playlist-renderer, ytd-grid-playlist-renderer, ytd-compact-playlist-renderer, ytd-rich-item-renderer, ytd-rich-grid-media, ytd-playlist-thumbnail')
         || /[?&]list=/.test(sourceHref);
       const top = lastNativeControl
@@ -339,7 +169,6 @@
       const videoChanged = button.dataset.url && button.dataset.url !== url;
       if (createdControl || videoChanged) fadePreviewBackground(control);
       button.dataset.url = url;
-      button.dataset.playlistUrl = playlistUrl || '';
       // Keep an accessible name without showing the browser's large native tooltip over the preview.
       button.title = '';
       button.setAttribute('aria-label', 'Download this video with Anchor');
@@ -514,11 +343,13 @@
       && actionRect.bottom > 0 && actionRect.top < window.innerHeight
       && actionRect.right > 0 && actionRect.left < window.innerWidth
       && actionRect.top >= playerRect.top && actionRect.bottom <= playerRect.bottom;
+    const rootWidth = root.getBoundingClientRect().width || 40;
+    const rootHeight = root.getBoundingClientRect().height || 40;
     const left = actionVisible
-      ? actionRect.left - 48
+      ? actionRect.left - rootWidth - 8
       : playerRect.right - Math.min(440, playerRect.width * 0.3);
     const top = actionVisible
-      ? actionRect.top + (actionRect.height - 40) / 2
+      ? actionRect.top + (actionRect.height - rootHeight) / 2
       : playerRect.bottom - 100;
     root.style.left = `${Math.max(8, left)}px`;
     root.style.top = `${Math.max(8, top)}px`;
@@ -598,6 +429,7 @@
     // A playlist's header sits on a dark backdrop in both themes, like the buttons YouTube puts there.
     if (!floating && location.pathname === '/playlist') root.classList.add('anchor-yt-overlay');
     build(root);
+    root.classList.toggle('anchor-yt-has-menu', !!root.querySelector('.anchor-yt-button[aria-haspopup="menu"]'));
     if (floating) document.body.append(root);
     else if (fullscreen) fullscreenHost().append(root);
     else if (shorts) target.insertBefore(root, before);

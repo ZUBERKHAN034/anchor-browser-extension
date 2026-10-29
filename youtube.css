@@ -253,25 +253,45 @@ html[dark] .anchor-yt-overlay .anchor-yt-button:hover {
   display: none;
 }
 
-/* Playlist videos keep the icon-only fullscreen button, with a small cue that it opens a menu. */
-.anchor-yt-fullscreen .anchor-yt-button[aria-haspopup="menu"] .anchor-yt-chevron {
-  position: absolute;
-  right: -4px;
-  bottom: -4px;
-  display: inline-flex;
-  width: 14px;
-  height: 14px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  color: #fff;
-  background: rgba(36, 33, 35, 0.96);
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7));
+/* Playlist fullscreen control matches YouTube's wide pill with the Anchor mark and dropdown cue. */
+#anchor-yt.anchor-yt-fullscreen.anchor-yt-has-menu {
+  width: 116px;
+  height: 80px;
 }
 
-.anchor-yt-fullscreen .anchor-yt-button[aria-haspopup="menu"] .anchor-yt-chevron svg {
-  width: 10px;
-  height: 10px;
+#anchor-yt.anchor-yt-fullscreen.anchor-yt-has-menu .anchor-yt-button {
+  display: inline-flex;
+  width: 116px;
+  min-width: 116px;
+  height: 80px;
+  padding: 0 14px;
+  gap: 12px;
+  justify-content: center;
+  border-radius: 40px;
+  background: #292729 !important;
+}
+
+#anchor-yt.anchor-yt-fullscreen.anchor-yt-has-menu .anchor-yt-mark,
+#anchor-yt.anchor-yt-fullscreen.anchor-yt-has-menu .anchor-yt-icon {
+  width: 48px;
+  height: 48px;
+}
+
+#anchor-yt.anchor-yt-fullscreen.anchor-yt-has-menu .anchor-yt-chevron {
+  position: static;
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: transparent;
+  filter: none;
+}
+
+#anchor-yt.anchor-yt-fullscreen.anchor-yt-has-menu .anchor-yt-chevron svg {
+  width: 18px;
+  height: 18px;
 }
 
 .anchor-yt-button.anchor-yt-failed {
