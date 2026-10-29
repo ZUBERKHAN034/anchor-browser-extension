@@ -49,29 +49,81 @@
       && style.visibility !== 'hidden' && style.display !== 'none';
   }
 
-  function timelineVideoLink(article) {
+  function postLinks(article) {
     const links = [...article.querySelectorAll('a[href]')].map((link) => {
       try {
         const url = new URL(link.href, location.origin);
         const match = url.pathname.match(/^\/(reel|reels|p)\/([^/]+)\/?$/);
-        return match ? { type: match[1], shortcode: match[2] } : null;
+        return match ? { type: match[1], shortcode: match[2], imgIndex: Number(url.searchParams.get('img_index')) || null } : null;
       } catch {
         return null;
       }
     }).filter(Boolean);
-    const post = links.find(({ type }) => type === 'reel' || type === 'reels')
-      || links.find(({ type }) => type === 'p');
+    return links;
+  }
+
+  function carouselIndex(article, links) {
+    const activeSlide = [...article.querySelectorAll('[aria-current="step"][aria-label], [aria-pressed="true"][aria-label]')]
+      .map((el) => el.getAttribute('aria-label') || '')
+      .map((label) => label.match(/(?:slide|item)\s*(\d+)/i))
+      .find(Boolean);
+    if (activeSlide) return Number(activeSlide[1]);
+
+    const linkIndex = links.find(({ type, imgIndex }) => type === 'p' && imgIndex)?.imgIndex;
+    if (linkIndex) return linkIndex;
+
+    const pageIndex = new URL(location.href).searchParams.get('img_index');
+    return Number(pageIndex) || 1;
+  }
+
+  function carouselViewport(video, article) {
+    for (let node = video.parentElement; node && node !== article; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      const clipsX = style.overflowX === 'hidden' || style.overflowX === 'clip'
+        || style.overflowX === 'auto' || style.overflowX === 'scroll';
+      if (clipsX && node.scrollWidth > node.clientWidth + 1) return node;
+    }
+    return null;
+  }
+
+  function activeTimelineVideo(article, hasCarousel) {
+    const videos = [...article.querySelectorAll('video')].filter(rendered);
+    if (!hasCarousel) return videos[0] || null;
+
+    // Instagram keeps adjacent carousel slides mounted while they are outside the clipped viewport.
+    // Only add the button when a video occupies the actual slide window, not when it is a neighbor.
+    return videos.find((video) => {
+      const viewport = carouselViewport(video, article);
+      if (!viewport) return false;
+      const media = video.getBoundingClientRect();
+      const frame = viewport.getBoundingClientRect();
+      const centerX = media.left + media.width / 2;
+      const centerY = media.top + media.height / 2;
+      return centerX >= frame.left && centerX <= frame.right
+        && centerY >= frame.top && centerY <= frame.bottom;
+    }) || null;
+  }
+
+  function timelineVideoLink(links, carousel, index) {
+    const post = carousel
+      ? links.find(({ type }) => type === 'p')
+      : links.find(({ type }) => type === 'reel' || type === 'reels') || links.find(({ type }) => type === 'p');
     if (!post) return null;
-    const route = post.type === 'p' ? 'p' : 'reel';
-    return `https://www.instagram.com/${route}/${post.shortcode}/`;
+    const route = carousel || post.type === 'p' ? 'p' : 'reel';
+    const slideQuery = carousel ? `?img_index=${index}` : '';
+    return `https://www.instagram.com/${route}/${post.shortcode}/${slideQuery}`;
   }
 
   function syncTimelineVideos() {
     const activeControls = new Set();
     if (!/^\/(?:reel|reels)\//.test(location.pathname)) {
       for (const article of document.querySelectorAll('article')) {
-        if (!article.querySelector('video')) continue;
-        const url = timelineVideoLink(article);
+        const links = postLinks(article);
+        const hasCarousel = !!article.querySelector('button[aria-label^="Go to slide "]')
+          || !!article.querySelector('button[aria-label="Next"], button[aria-label="Go back"]')
+          || links.some(({ type, imgIndex }) => type === 'p' && imgIndex);
+        if (!activeTimelineVideo(article, hasCarousel)) continue;
+        const url = timelineVideoLink(links, hasCarousel, carouselIndex(article, links));
         if (!url) continue;
 
         const saveIcon = [...article.querySelectorAll('svg[aria-label="Save"]')].find(rendered);
