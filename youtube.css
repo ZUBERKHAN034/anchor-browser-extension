@@ -21,11 +21,14 @@
 }
 
 .anchor-yt-button {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 16px 0 10px;
+  justify-content: center;
+  gap: 4px;
+  height: 40px;
+  min-width: 40px;
+  padding: 0 8px;
   border: none;
   border-radius: 18px;
   cursor: pointer;
@@ -33,7 +36,7 @@
   font-family: "Roboto", "Arial", sans-serif;
   font-size: 14px;
   font-weight: 500;
-  line-height: 36px;
+  line-height: normal;
   color: #0f0f0f;
   background: rgba(0, 0, 0, 0.05);
 }
@@ -68,28 +71,233 @@ html[dark] .anchor-yt-overlay .anchor-yt-button:hover {
   width: 24px;
   height: 24px;
   flex: none;
+  transition: opacity 120ms ease;
+}
+
+.anchor-yt-mark {
+  position: relative;
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  place-items: center;
+}
+
+.anchor-yt-spinner {
+  position: absolute;
+  inset: -3px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.anchor-yt-sending .anchor-yt-icon {
+  opacity: 0.35;
+}
+
+.anchor-yt-sending .anchor-yt-spinner {
+  opacity: 1;
+  animation: anchor-yt-spin 700ms linear infinite;
+}
+
+@keyframes anchor-yt-spin {
+  to { transform: rotate(360deg); }
+}
+
+.anchor-yt-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.anchor-yt-chevron {
+  display: inline-flex;
+  align-items: center;
 }
 
 .anchor-yt-button svg {
   flex: none;
 }
 
+/* The hover button in a thumbnail's top-left corner, kept at the same spot when it moves into the hover preview. */
+.anchor-yt-preview-control {
+  position: absolute !important;
+  top: 8px;
+  left: 8px;
+  z-index: 70;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+.anchor-yt-thumb-host {
+  position: relative;
+}
+
+.anchor-yt-preview-control::before {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 50%;
+  background: rgba(33, 33, 33, 0.78);
+  content: "";
+  opacity: 1;
+  pointer-events: none;
+  transition: opacity 0.25s cubic-bezier(0, 0, 0.2, 1);
+}
+
+.anchor-yt-preview-control.anchor-yt-preview-background-faded::before {
+  opacity: 0;
+}
+
+.anchor-yt-preview-icon {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  z-index: 1;
+  place-items: center;
+}
+
+.anchor-yt-preview-button {
+  position: absolute;
+  inset: -4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  padding: 12px;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #fff;
+  background: transparent;
+  pointer-events: auto !important;
+}
+
 .anchor-yt-floating .anchor-yt-button {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+/* Shorts uses a 48px vertical action rail with circular icon controls. */
+#anchor-yt.anchor-yt-short {
+  width: 48px;
+  height: 56px;
+  margin: 0 0 6px;
+  justify-content: flex-start;
+}
+
+.anchor-yt-short .anchor-yt-button {
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 50%;
+  color: #f1f1f1;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.anchor-yt-short .anchor-yt-button:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* Fullscreen uses a separate logo beside the on-video Like/Dislike action row. */
+#anchor-yt.anchor-yt-fullscreen,
+#anchor-yt.anchor-yt-fullscreen.anchor-yt-short {
+  position: fixed;
+  z-index: 2147483000;
+  display: flex;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  gap: 0;
+}
+
+#anchor-yt.anchor-yt-fullscreen .anchor-yt-button {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(36, 33, 35, 0.85) !important;
+}
+
+#anchor-yt.anchor-yt-fullscreen .anchor-yt-button:hover {
+  background: rgba(36, 33, 35, 0.85) !important;
+}
+
+.anchor-yt-fullscreen .anchor-yt-label,
+.anchor-yt-fullscreen .anchor-yt-chevron {
+  display: none;
+}
+
+/* Keep the fullscreen playlist button the same compact size as Anchor's regular action-row button. */
+#anchor-yt.anchor-yt-fullscreen.anchor-yt-has-menu {
+  width: auto;
+  height: 40px;
+}
+
+#anchor-yt.anchor-yt-fullscreen.anchor-yt-has-menu .anchor-yt-button {
+  display: inline-flex;
+  width: auto;
+  min-width: 40px;
+  height: 40px;
+  padding: 0 8px;
+  gap: 4px;
+  justify-content: center;
+  border-radius: 18px;
+  background: rgba(36, 33, 35, 0.85) !important;
+}
+
+#anchor-yt.anchor-yt-fullscreen.anchor-yt-has-menu .anchor-yt-mark,
+#anchor-yt.anchor-yt-fullscreen.anchor-yt-has-menu .anchor-yt-icon {
+  width: 24px;
+  height: 24px;
+}
+
+#anchor-yt.anchor-yt-fullscreen.anchor-yt-has-menu .anchor-yt-chevron {
+  position: static;
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: transparent;
+  filter: none;
+}
+
+#anchor-yt.anchor-yt-fullscreen.anchor-yt-has-menu .anchor-yt-chevron svg {
+  width: 14px;
+  height: 14px;
 }
 
 .anchor-yt-button.anchor-yt-failed {
   color: #c4532e;
 }
 
-.anchor-yt-button span + svg {
+.anchor-yt-chevron svg {
   color: inherit;
-  margin-left: -2px;
+  width: 14px;
+  height: 14px;
 }
 
 .anchor-yt-menu {
   position: fixed;
-  z-index: 2202;
+  z-index: 2147483001;
   min-width: 170px;
   padding: 8px 0;
   border-radius: 12px;
@@ -126,3 +334,29 @@ html[dark] .anchor-yt-menu button {
 html[dark] .anchor-yt-menu button:hover {
   background: rgba(255, 255, 255, 0.1);
 }
+
+.anchor-yt-preview-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 6px;
+  min-width: 140px;
+  padding: 4px;
+  border-radius: 10px;
+  background: rgba(28, 28, 28, 0.96);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+}
+.anchor-yt-preview-menu button {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: #fff;
+  font: 500 13px/1.2 Roboto, Arial, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+.anchor-yt-preview-menu button:hover { background: rgba(255, 255, 255, 0.12); }
